@@ -1,0 +1,98 @@
+import zipfile
+
+import pytest
+
+from printyz_clicker.config.mechanical import KEYCAP_STYLES
+from printyz_clicker.export.exporter import export_all
+from printyz_clicker.geometry.builder import build_project
+from printyz_clicker.model.project import Project
+from printyz_clicker.text.engine import sync_keys_from_text
+from printyz_clicker.validation.checks import validate
+
+pytestmark = pytest.mark.slow
+
+
+def make(text, **kw):
+    p = Project(name="t")
+    sync_keys_from_text(p, text)
+    for k, v in kw.items():
+        obj, attr = (p, k) if "__" not in k else (getattr(p, k.split("__")[0]), k.split("__")[1])
+        setattr(obj, attr, v)
+    return p
+
+
+def test_hebrew_flush_passes_validation():
+    res = build_project(make("שלום"))
+    rep = validate(res)
+    assert rep.passed, rep.to_markdown()
+    assert len([p for p in res.parts if p.role == "legend"]) == 4
+
+
+@pytest.mark.parametrize("style", list(KEYCAP_STYLES))
+def test_keycap_styles_change_real_geometry(style):
+    res = build_project(make("A", keycap_style=style), include_switches=False)
+    cap = next(p for p in res.parts if p.role == "cap")
+    bb = cap.solid.bounding_box()
+    assert abs(bb.size.Z - KEYCAP_STYLES[style].height) < 1e-3
+    assert validate(res, mesh_checks=False).passed
+
+
+def test_raised_and_engraved():
+    raised = build_project(make("A", lettering__mode="raised"), include_switches=False)
+    leg = next(p for p in raised.parts if p.role == "legend")
+    cap = next(p for p in raised.parts if p.role == "cap")
+    assert leg.solid.bounding_box().min.Z == pytest.approx(cap.solid.bounding_box().max.Z, abs=1e-4)
+    eng = build_project(make("A", lettering__mode="engraved"), include_switches=False)
+    assert not [p for p in eng.parts if p.role == "legend"]
+
+
+def test_requested_size_is_clamped_to_area():
+    res = build_project(make("A", lettering__size=22.0), include_switches=False)
+    assert any("size reduced" in w for w in res.warnings)
+    assert validate(res, mesh_checks=False).passed
+
+
+def test_grid_wasd_keychain_bodies_single_solid():
+    for kw in ({"layout__style": "grid", "layout__rows": 2, "layout__cols": 3},
+               {"layout__style": "wasd"}):
+        p = make("WASDE"[: 5 if kw["layout__style"] == "grid" else 4], **kw)
+        p.keychain.enabled = True
+        res = build_project(p, include_switches=False)
+        assert res.ok, res.errors
+        assert len(res.body.solid.solids()) == 1
+
+
+def test_missing_glyph_is_error():
+    res = build_project(make("中"))  # CJK not in default font
+    assert not res.ok
+
+
+def test_export_bundle(tmp_path):
+    res = build_project(make("Hi"))
+    rep = validate(res)
+    folder = export_all(res, rep, tmp_path)
+    exp = folder / "Exports"
+    assert (exp / "t_print.3mf").exists() and (exp / "t_assembly.step").exists()
+    assert len(list((exp / "STL").glob("*.stl"))) == 5   # body + 2 caps + 2 legends
+    with zipfile.ZipFile(exp / "t_print.3mf") as z:
+        cfg = z.read("Metadata/Slic3r_PE_model.config").decode()
+        assert cfg.count("<volume") == 5 and 'key="extruder" value="3"' in cfg
+    reloaded = Project.load(folder / "t.printyz.json")
+    assert [k.value for k in reloaded.keys] == ["H", "i"]
+
+
+def test_grooved_joint_really_removes_material():
+    vols = {}
+    for joint in ("smooth", "grooved"):
+        p = make("abc", body__joint=joint)
+        vols[joint] = build_project(p, include_switches=False).body.solid.volume
+    # 2 boundaries x 2 sides x V-notch (0.5*1.6*0.8 mm2) x ~17.6 mm height ~ 45 mm3
+    assert vols["smooth"] - vols["grooved"] > 30
+
+
+def test_keychain_adds_material_and_hole():
+    off = build_project(make("ab"), include_switches=False).body
+    p = make("ab")
+    p.keychain.enabled = True
+    on = build_project(p, include_switches=False).body
+    assert on.solid.volume > off.solid.volume + 100 and on.keychain_hole is not None
