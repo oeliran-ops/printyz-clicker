@@ -25,8 +25,40 @@ def _counters(sk) -> int:
     return sum(len(f.inner_wires()) for f in sk.faces())
 
 
-def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringSpec) -> LegendInfo:
-    """Build the glyph sketch, centred on (0,0) + offsets, guaranteed inside the allowed area."""
+def glyph_box(char: str, font_path: str) -> tuple[float, float] | None:
+    """Glyph outline size at font_size 10 (used to derive one common scale)."""
+    t = Text(char, font_size=10.0, font_path=font_path, align=(Align.CENTER, Align.CENTER))
+    if not t.faces():
+        return None
+    bb = t.bounding_box()
+    return bb.size.X, bb.size.Y
+
+
+def fit_scale(boxes: list[tuple[float, float]], legend_area: float, spec: LetteringSpec) -> tuple[float, list[str]]:
+    """One scale for a set of glyphs: every glyph fits; the tallest reaches spec.size if requested."""
+    warnings: list[str] = []
+    margin = min(max(spec.margin, MIN_MARGIN), MAX_MARGIN)
+    avail = legend_area - 2 * margin - 2 * max(0.0, spec.extra_weight)
+    if not boxes or avail <= 0:
+        return 0.0, warnings
+    fit = min(min(avail / w, avail / h) for w, h in boxes)
+    if spec.size is None:
+        return fit, warnings
+    want = spec.size / max(h for _, h in boxes)
+    if want > fit:
+        tallest = max(h for _, h in boxes) * fit
+        warnings.append(f"גודל {spec.size:.1f} מ\"מ גדול מהשטח המותר — הוקטן ל-{tallest:.1f}. / "
+                        f"size reduced to {tallest:.1f} mm to fit.")
+    return min(want, fit), warnings
+
+
+def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringSpec,
+                 scale: Optional[float] = None) -> LegendInfo:
+    """Build the glyph sketch, centred on (0,0) + offsets, guaranteed inside the allowed area.
+
+    `scale` (from fit_scale over all keys) gives every key the same letter size; without it
+    the glyph is fitted on its own.
+    """
     warnings: list[str] = []
     margin = spec.margin
     if not (MIN_MARGIN <= margin <= MAX_MARGIN):
@@ -40,20 +72,12 @@ def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringS
     if not base.faces():
         return LegendInfo(None, warnings=warnings + [f"לגליף '{char}' אין גיאומטריה. / glyph has no outline."])
     bb = base.bounding_box()
-    gw, gh = bb.size.X, bb.size.Y
-    fit = min((avail - 2 * ew) / gw, (avail - 2 * ew) / gh)
-    if fit <= 0:
+    if scale is None:
+        scale, w2 = fit_scale([(bb.size.X, bb.size.Y)], legend_area, spec)
+        warnings += w2
+    if scale <= 0:
         return LegendInfo(None, warnings=warnings + ["אין מקום לאות עם העיבוי והשוליים שנבחרו. / No room for legend."])
-    if spec.size is not None:
-        want = spec.size / gh
-        if want > fit:
-            warnings.append(
-                f"גודל {spec.size:.1f} מ\"מ גדול מהשטח המותר — הוקטן ל-{gh*fit:.1f}. / "
-                f"size reduced to {gh*fit:.1f} mm to fit."
-            )
-        s = min(want, fit)
-    else:
-        s = fit
+    s = scale
     sk = base.scale(s)
     if ew > 0:
         before = _counters(sk)

@@ -53,7 +53,8 @@ class LetteringSpec:
     mode: LegendMode = "flush"
     font_id: str = "default-bold"
     extra_weight: float = 0.0       # mm of real outline growth
-    size: Optional[float] = None    # requested glyph height in mm; None = largest that fits
+    size: Optional[float] = None    # requested height (mm) of the tallest glyph; None = largest that fits
+    uniform: bool = True            # one scale for all keys (consistent letter size)
     margin: float = 1.25            # mm from flat top-face edge (allowed 1.0 - 3.5)
     offset_x: float = 0.0
     offset_y: float = 0.0

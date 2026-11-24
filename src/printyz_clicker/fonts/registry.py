@@ -26,6 +26,11 @@ class FontEntry:
     notes: str = ""                        # test-print notes
     supports_hebrew: bool = False          # filled by inspect()
     supports_latin: bool = False
+    weight: int = 400                      # OS/2 usWeightClass (filled by inspect())
+
+    @property
+    def is_bold(self) -> bool:
+        return self.weight >= 600
 
 
 def _candidate_default_fonts() -> list[tuple[str, str]]:
@@ -56,9 +61,12 @@ def inspect(entry: FontEntry) -> FontEntry:
     cmap = font_cmap(entry.path)
     entry.supports_hebrew = all(ord(c) in cmap for c in "אבגדהוזחטיכלמנסעפצקרשתךםןףץ")
     entry.supports_latin = all(ord(c) in cmap for c in "ABCabc0123")
+    f = TTFont(entry.path, lazy=True, fontNumber=0)
     if not entry.family:
-        name = TTFont(entry.path, lazy=True)["name"]
-        entry.family = str(name.getDebugName(1) or Path(entry.path).stem)
+        name = f["name"]
+        entry.family = str(name.getDebugName(16) or name.getDebugName(1) or Path(entry.path).stem)
+    if "OS/2" in f:
+        entry.weight = int(f["OS/2"].usWeightClass)
     return entry
 
 
@@ -89,6 +97,33 @@ class FontRegistry:
         if Path(font_id).exists():  # direct path (developer use)
             return inspect(FontEntry(id=font_id, path=font_id))
         raise KeyError(f"Font {font_id!r} is not registered")
+
+    def sibling(self, entry: FontEntry, bold: bool) -> FontEntry | None:
+        """Same family, other weight (for the Regular / Bold switch)."""
+        cands = [f for f in self.fonts.values() if f.family == entry.family and f.is_bold == bold]
+        # prefer an approved variant, then the weight closest to 400 / 700
+        return min(cands, key=lambda f: (not f.approved, abs(f.weight - (700 if bold else 400))), default=None)
+
+    def scan_installed(self) -> list[FontEntry]:
+        """Developer: register every installed TTF/OTF (unapproved) so it can be reviewed."""
+        dirs = [Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts",
+                Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Windows" / "Fonts",
+                Path("/usr/share/fonts"), Path.home() / ".fonts", Path("/Library/Fonts")]
+        known = {f.path for f in self.fonts.values()}
+        added = []
+        for d in dirs:
+            if not d.is_dir():
+                continue
+            for p in sorted(d.rglob("*")):
+                if p.suffix.lower() not in (".ttf", ".otf") or str(p) in known:
+                    continue
+                try:
+                    e = inspect(FontEntry(id=f"sys:{p.stem}", path=str(p)))
+                except Exception:  # noqa: BLE001 - broken font files are skipped
+                    continue
+                self.fonts[e.id] = e
+                added.append(e)
+        return added
 
     def customer_fonts(self) -> list[FontEntry]:
         return [f for f in self.fonts.values() if f.approved]

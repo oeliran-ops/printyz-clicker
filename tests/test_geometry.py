@@ -96,3 +96,15 @@ def test_keychain_adds_material_and_hole():
     p.keychain.enabled = True
     on = build_project(p, include_switches=False).body
     assert on.solid.volume > off.solid.volume + 100 and on.keychain_hole is not None
+
+
+def test_uniform_letter_scale_across_keys():
+    # ם ו ש have the same height in the font; with one common scale they must match on the keycaps
+    res = build_project(make("שום"), include_switches=False)
+    hs = [h for _, h in res.legend_boxes.values()]
+    assert max(hs) - min(hs) < 0.05
+    assert validate(res, mesh_checks=False).passed
+    p = make("שום")
+    p.lettering.uniform = False          # old behaviour: each key stretched on its own
+    indep = [h for _, h in build_project(p, include_switches=False).legend_boxes.values()]
+    assert max(indep) - min(indep) > 1.0

@@ -17,7 +17,7 @@ from ..layout.engine import LayoutResult, compute_layout
 from ..model.project import Project
 from .body import BodyResult, build_body
 from .keycap import apply_legend, keycap_body
-from .lettering import build_legend
+from .lettering import build_legend, fit_scale, glyph_box
 from .switch_proxy import switch_proxy
 
 
@@ -88,6 +88,11 @@ def build_project(project: Project, fonts: FontRegistry | None = None,
     blank_cap = keycap_body(style)
     keys_by_id = {k.id: k for k in project.keys}
     mode = project.lettering.mode
+    common_scale = None
+    if project.lettering.uniform:
+        boxes = [b for b in (glyph_box(k.value, font.path) for k in project.keys if k.kind == "char" and k.value) if b]
+        common_scale, w = fit_scale(boxes, style.legend_area, project.lettering)
+        res.warnings += w
 
     for idx, pk in enumerate(sorted(layout.keys, key=lambda k: (k.row, k.col)), start=1):
         tag = f"key{idx:02d}"
@@ -96,7 +101,7 @@ def build_project(project: Project, fonts: FontRegistry | None = None,
         legend_color = project.legend_color(key) if key else project.colors.legend
         cap, legend = blank_cap, None
         if key is not None and key.kind == "char" and key.value:
-            info = build_legend(key.value, font.path, style.legend_area, project.lettering)
+            info = build_legend(key.value, font.path, style.legend_area, project.lettering, common_scale)
             res.warnings += [f"[{key.value}] {w}" for w in info.warnings]
             if info.sketch is not None:
                 cap, legend = apply_legend(blank_cap, style, info.sketch, mode,

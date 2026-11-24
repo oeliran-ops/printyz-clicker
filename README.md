@@ -13,7 +13,12 @@ $py = "$env:LOCALAPPDATA\PRINTYZ\ClickerV2\.venv\Scripts\python.exe"
 ```
 ב־Terminal חדש מגדירים שוב את `$py` לפני שאר הפקודות.
 
-## שימוש (שלב 1 – שורת פקודה)
+## הפעלת התוכנה (ממשק גרפי)
+```
+& $py -m printyz_clicker.ui
+```
+
+## שימוש משורת הפקודה
 ```
 & $py -m printyz_clicker build --text "שלום" --keychain top
 & $py -m printyz_clicker build --text Daniel --layout grid --rows 2 --cols 3 --cap-color "#1E5BD8" --legend-color "#FFD400"
