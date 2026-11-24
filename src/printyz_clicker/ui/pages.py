@@ -196,6 +196,7 @@ class NamePage(Page):
 
         self.section(tr("מקשים (לפי סדר המוצר)", "Keys (product order)"))
         self.strip = KeyStrip(ctl)
+        self.strip.selected.connect(lambda _: self.refresh())
         self.add(self.strip)
         row = QHBoxLayout()
         self.add_left = QPushButton(tr("+ ריק משמאל", "+ Blank left"))
@@ -930,6 +931,12 @@ class KeychainPage(Page):
         self.enabled = QCheckBox(tr("הוסף מחזיק מפתחות", "Add keychain tab"))
         self.enabled.toggled.connect(lambda v: self._set("enabled", v))
         self.add(self.enabled)
+        self.section(tr("צורה", "Shape"))
+        self.shape = Segmented([("rounded", tr("מעוגל", "Rounded")), ("round", tr("עגול", "Round")),
+                                ("square", tr("מרובע", "Square"))])
+        self.shape.changed.connect(lambda v: self._set("shape", v))
+        self.add(self.shape)
+        self.section(tr("צד", "Side"))
         self.side = Segmented([("top", tr("עליון", "Top")), ("bottom", tr("תחתון", "Bottom")),
                                ("right", tr("ימין", "Right")), ("left", tr("שמאל", "Left"))])
         self.side.changed.connect(lambda v: self._set("side", v))
@@ -948,8 +955,10 @@ class KeychainPage(Page):
             s.valueChanged.connect(lambda v, a=attr: self._set(a, v))
             f.addRow(lab, s)
             self.fields[attr] = s
-        self.hint(tr("חוזק הלשונית ייבדק בהדפסה ובמשיכה לפני שימוש מסחרי.",
-                     "Tab strength must be verified with a printed pull test."))
+        self.hint(tr("כללי חוזק קבועים לכל הצורות: לפחות 2 מ\"מ חומר סביב החור, 1.5 מ\"מ בין החור לגוף ועובי 3 מ\"מ. "
+                     "ערך שאינו עומד בהם מתוקן אוטומטית. מומלץ בדיקת משיכה בהדפסה לפני שימוש מסחרי.",
+                     "Strength rules for all shapes: 2 mm around the hole, 1.5 mm to the body, 3 mm thick; "
+                     "values below are corrected automatically. Pull-test a print before commercial use."))
         self.finish()
         ctl.changed.connect(self.refresh)
         self.refresh()
@@ -965,6 +974,8 @@ class KeychainPage(Page):
         self.enabled.setChecked(k.enabled)
         self.enabled.blockSignals(False)
         self.side.set_value(k.side)
+        self.shape.set_value(k.shape)
+        self.shape.setEnabled(k.enabled)
         self.offset.blockSignals(True)
         self.offset.setValue(int(k.offset * 2))
         self.offset.blockSignals(False)
@@ -1021,9 +1032,13 @@ class MechanicalPage(Page):
 
 # ---------------------------------------------------------------------------------------------
 class ExportPage(Page):
-    def __init__(self, ctl: ProjectController, do_export):
+    def __init__(self, ctl: ProjectController, do_export, settings_path: Path | None = None):
         super().__init__(tr("ייצוא", "Export"))
+        from ..config import print_profile
+
         self.ctl = ctl
+        self.settings_path = settings_path
+        self.settings = print_profile.load(settings_path)
         self.section(tr("תיקיית פרויקטים", "Projects folder"))
         row = QHBoxLayout()
         self.folder = QLineEdit(str(Path.home() / "Documents" / "PRINTYZ" / "Projects"))
@@ -1049,9 +1064,55 @@ class ExportPage(Page):
                                               tuple(k for k, cb in self.fmt.items() if cb.isChecked()),
                                               self.previews.isChecked()))
         self.add(btn)
+        self.hint(tr("נוצרים שני קובצי 3MF: ‎_bambu.3mf — פרויקט Bambu Studio עם פלטה 1 לגוף, פלטה 2 לכובעים "
+                     "והגדרות ההדפסה למטה; ‎_print.3mf — קובץ צבעוני כללי.",
+                     "Two 3MF files: _bambu.3mf (Bambu Studio project: plate 1 body, plate 2 keycaps, the print "
+                     "settings below) and _print.3mf (generic multi-colour)."))
+        self.dev_box = QFrame()
+        dv = QVBoxLayout(self.dev_box)
+        dv.setContentsMargins(0, 0, 0, 0)
+        head = QLabel(tr(f"הגדרות הדפסה לסלייסר (מפתח) — מבוסס {print_profile.PROCESS_PRESET}",
+                         f"Slicer settings (developer) - based on {print_profile.PROCESS_PRESET}"))
+        head.setObjectName("Section")
+        head.setWordWrap(True)
+        dv.addWidget(head)
+        from PySide6.QtWidgets import QFormLayout
+
+        form = QFormLayout()
+        self.setting_edits: dict[str, QLineEdit] = {}
+        for k, v in self.settings.items():
+            e = QLineEdit(v)
+            e.setToolTip(k)
+            e.editingFinished.connect(lambda key=k, w=e: self._set_setting(key, w.text()))
+            form.addRow(print_profile.LABELS_HE.get(k, k) if is_rtl() else k, e)
+            self.setting_edits[k] = e
+        dv.addLayout(form)
+        reset = QPushButton(tr("החזר לברירת מחדל", "Restore defaults"))
+        reset.clicked.connect(self._reset_settings)
+        dv.addWidget(reset)
+        self.add(self.dev_box)
         self.result = self.hint("")
         self.result.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.finish()
+
+    def _set_setting(self, key: str, value: str) -> None:
+        from ..config import print_profile
+
+        self.settings[key] = value.strip()
+        if self.settings_path:
+            print_profile.save(self.settings_path, self.settings)
+
+    def _reset_settings(self) -> None:
+        from ..config import print_profile
+
+        self.settings = dict(print_profile.DEFAULT_SETTINGS)
+        for k, e in self.setting_edits.items():
+            e.setText(self.settings.get(k, ""))
+        if self.settings_path:
+            print_profile.save(self.settings_path, self.settings)
+
+    def refresh(self) -> None:
+        self.dev_box.setVisible(self.ctl.developer_mode)
 
     def _browse(self) -> None:
         d = QFileDialog.getExistingDirectory(self, tr("בחר תיקייה", "Choose folder"), self.folder.text())
@@ -1077,11 +1138,16 @@ def svg_pixmap(svg: str, size: int = 44):
 class SymbolsPage(Page):
     """Built-in symbol library + SVG import (spec 19-21). Symbols use the same modes and colours as letters."""
 
-    def __init__(self, ctl: ProjectController):
+    def __init__(self, ctl: ProjectController, library=None):
         super().__init__(tr("סמלים ו־SVG", "Symbols & SVG"))
-        from ..geometry.symbols import SYMBOLS
+        from ..geometry.symbols import SYMBOLS, SymbolLibrary
 
         self.ctl = ctl
+        self.library = library or SymbolLibrary()
+        self.edit_lib = QCheckBox(tr("עריכת ספריית הלקוח: לחיצה על סמל מסתירה / מציגה אותו ללקוח",
+                                     "Edit customer library: click a symbol to hide / show it"))
+        self.edit_lib.toggled.connect(lambda _: self._rebuild_grid())
+        self.add(self.edit_lib)
         self.picked: tuple[str, str] | None = None      # (kind, value)
         self.hint(tr("1. בחר סמל  2. בחר מקש למטה (או בלי מקש)  3. לחץ על פעולה.",
                      "1. Pick a symbol  2. pick a key below (optional)  3. choose an action."))
@@ -1097,6 +1163,7 @@ class SymbolsPage(Page):
         self.svg_info = self.hint("")
         self.section(tr("מקשים (לפי סדר המוצר)", "Keys (product order)"))
         self.strip = KeyStrip(ctl)
+        self.strip.selected.connect(lambda _: self.refresh())     # selecting a key enables "apply"
         self.add(self.strip)
         row = QHBoxLayout()
         self.apply_btn = QPushButton(tr("החל על המקש שנבחר", "Apply to selected key"))
@@ -1122,20 +1189,47 @@ class SymbolsPage(Page):
 
     def showEvent(self, e):  # noqa: N802 - build the icon grid lazily (first time the page is opened)
         if not self._icons_built:
-            from ..geometry.symbols import sketch_to_svg, symbol_sketch
-
-            for i, (sid, (he, en, _)) in enumerate(self._symbols.items()):
-                b = QPushButton()
-                b.setCheckable(True)
-                b.setFixedSize(58, 58)
-                b.setIconSize(QSize(40, 40))
-                b.setIcon(QIcon(svg_pixmap(sketch_to_svg(symbol_sketch(sid)))))
-                b.setToolTip(tr(he, en))
-                b.clicked.connect(lambda _=False, s=sid: self._pick(("symbol", s)))
-                self.grid.addWidget(b, i // 5, i % 5)
-                self.buttons[sid] = b
+            self._rebuild_grid()
             self._icons_built = True
         super().showEvent(e)
+
+    def _rebuild_grid(self) -> None:
+        from ..geometry.symbols import sketch_to_svg, symbol_sketch
+
+        while self.grid.count():
+            w = self.grid.takeAt(0).widget()
+            if w:
+                w.setParent(None)
+                w.deleteLater()
+        self.buttons.clear()
+        dev = self.ctl.developer_mode
+        editing = dev and self.edit_lib.isChecked()
+        i = 0
+        for sid, (he, en, _) in self._symbols.items():
+            shown = self.library.visible(sid)
+            if not shown and not dev:
+                continue                          # customers only see approved symbols
+            b = QPushButton()
+            b.setCheckable(True)
+            b.setFixedSize(58, 58)
+            b.setIconSize(QSize(40, 40))
+            color = "#2B2F36" if shown else "#C3C8D0"
+            b.setIcon(QIcon(svg_pixmap(sketch_to_svg(symbol_sketch(sid), color))))
+            tip = tr(he, en) + ("" if shown else tr("  (מוסתר מהלקוח)", "  (hidden from customers)"))
+            b.setToolTip(tip)
+            if editing:
+                b.setStyleSheet("QPushButton { border: 1px dashed #9AA3B2; }")
+                b.clicked.connect(lambda _=False, s=sid: self._toggle_visible(s))
+            else:
+                b.clicked.connect(lambda _=False, s=sid: self._pick(("symbol", s)))
+                b.setChecked(self.picked == ("symbol", sid))
+            self.grid.addWidget(b, i // 5, i % 5)
+            self.buttons[sid] = b
+            i += 1
+
+    def _toggle_visible(self, sid: str) -> None:
+        self.library.set_visible(sid, not self.library.visible(sid))
+        self._rebuild_grid()
 
     def _pick(self, what: tuple[str, str]) -> None:
         self.picked = what
@@ -1184,6 +1278,10 @@ class SymbolsPage(Page):
             self.ctl.touch()
 
     def refresh(self) -> None:
+        self.edit_lib.setVisible(self.ctl.developer_mode)
+        if self._icons_built and getattr(self, "_grid_mode", None) != self.ctl.developer_mode:
+            self._rebuild_grid()
+        self._grid_mode = self.ctl.developer_mode
         self.strip.refresh()
         has_key = self.strip.current is not None
         self.apply_btn.setEnabled(bool(self.picked) and has_key)
@@ -1191,4 +1289,10 @@ class SymbolsPage(Page):
         self.right_btn.setEnabled(bool(self.picked))
         self.clear_btn.setEnabled(has_key)
         n = len(self.ctl.project.keys)
-        self.status.setText(tr(f"{n} מקשים מתוך 10", f"{n} of 10 keys"))
+        if not self.picked:
+            msg = tr("בחר סמל מהרשימה.", "Pick a symbol.")
+        elif not has_key:
+            msg = tr("בחר מקש כדי להחיל עליו את הסמל, או הוסף מקש חדש.", "Select a key to apply to, or add a new key.")
+        else:
+            msg = tr("מוכן — לחץ \"החל על המקש שנבחר\".", "Ready - press Apply.")
+        self.status.setText(f"{msg}  ({n}/10)")

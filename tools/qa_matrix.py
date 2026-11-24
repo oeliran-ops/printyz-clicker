@@ -45,6 +45,7 @@ for i, c in enumerate(CASES):
     p.lettering.mode, p.keycap_style, p.body.texture = c["mode"], c["cap"], c["tex"]
     if c["kc"]:
         p.keychain.enabled, p.keychain.side = True, c["kc"]
+        p.keychain.shape = ["rounded", "round", "square"][i % 3]
     if c.get("extra") == "symbols":
         for sid in ("crown", "heart", "magen_david"):
             insert_key_visual(p, "left", None, "symbol", sid)

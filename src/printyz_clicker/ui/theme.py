@@ -41,6 +41,8 @@ QPushButton:hover {{ background: #F0F3F8; }}
 QPushButton:checked {{ background: #E3ECFD; border: 1px solid {ACCENT}; color: {ACCENT_DARK}; font-weight: 600; }}
 QPushButton#Primary {{ background: {ACCENT}; color: white; border: none; font-weight: 600; }}
 QPushButton#Primary:hover {{ background: {ACCENT_DARK}; }}
+QPushButton#Primary:disabled {{ background: #C9D6F5; color: #F4F7FD; }}
+QPushButton:disabled {{ color: #A9AEB6; background: #F6F7F9; }}
 QPushButton#Chip {{ border-radius: 14px; padding: 4px 10px; min-width: 26px; font-size: 12pt; }}
 QPushButton#ViewBtn {{ padding: 5px 10px; font-size: 9.5pt; }}
 QCheckBox {{ spacing: 8px; }}

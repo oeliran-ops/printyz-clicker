@@ -177,5 +177,6 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
                 f"{p.body.texture}, depth ≤ {b.outer_wall - 0.9:.2f} mm, outside wall only (pockets untouched)")
     if p.keychain.enabled:
         rep.add("keychain / מחזיק מפתחות", OK if len(body.solid.solids()) == 1 else ERROR,
-                "tab fused to body (single solid); strength needs a physical pull test")
+                f"{p.keychain.shape}: fused to body, ≥2 mm around hole, ≥1.5 mm to body, ≥3 mm thick; "
+                "pull-test a print before commercial use")
     return rep

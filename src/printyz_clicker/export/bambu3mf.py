@@ -1,0 +1,160 @@
+"""Bambu Studio project 3MF: objects with parts (per-part filament), two plates
+(plate 1 = body, plate 2 = keycaps) and per-object print settings.
+
+Format follows Bambu Studio's project layout (3D/3dmodel.model with components pointing to
+3D/Objects/*.model, Metadata/model_settings.config with <object>/<part>/<plate>).
+Process/printer presets are NOT embedded (a partial project_settings.config could override
+your printer); the settings travel as per-object overrides instead.
+
+VERIFY on the target Bambu Studio version (see export report).
+"""
+
+from __future__ import annotations
+
+import uuid
+import zipfile
+from dataclasses import dataclass
+from xml.sax.saxutils import quoteattr
+
+import numpy as np
+
+from ..config.print_profile import BED_SIZE, PLATE_GAP_RATIO
+from .mesh import Mesh
+
+APP = "BambuStudio-01.09.07.52"
+NS = ('xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
+      'xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" '
+      'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"')
+IDENTITY = "1 0 0 0 1 0 0 0 1 0 0 0"
+
+
+@dataclass
+class BPart:
+    name: str
+    mesh: Mesh
+    extruder: int
+
+
+@dataclass
+class BObject:
+    name: str
+    parts: list[BPart]
+    plate: int            # 1-based
+    x: float              # centre position on its plate (mm, plate-local)
+    y: float
+
+
+def _f(a: float) -> str:
+    s = f"{a:.5f}".rstrip("0").rstrip(".")
+    return "0" if s in ("-0", "") else s
+
+
+def plate_origin(plate: int) -> tuple[float, float]:
+    """Bambu lays plates out left-to-right in a grid; 2 plates -> one row."""
+    stride = BED_SIZE[0] * (1 + PLATE_GAP_RATIO)
+    return (plate - 1) * stride, 0.0
+
+
+def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], title: str = "PRINTYZ") -> None:
+    files: dict[str, str] = {}
+    rels = []
+    root_objs, build_items, cfg = [], [], ['<?xml version="1.0" encoding="UTF-8"?>', "<config>"]
+    plates: dict[int, list[tuple[int, int]]] = {}
+    next_id = 1
+    identify = 100
+    for oi, obj in enumerate(objects, start=1):
+        sub = f"/3D/Objects/object_{oi}.model"
+        sub_lines = ['<?xml version="1.0" encoding="UTF-8"?>', f"<model unit=\"millimeter\" xml:lang=\"en-US\" {NS}>",
+                     ' <metadata name="BambuStudio:3mfVersion">1</metadata>', " <resources>"]
+        comps, part_ids = [], []
+        # centre the object's parts on its own origin (XY) and keep z >= 0
+        allv = np.vstack([p.mesh.vertices for p in obj.parts])
+        cx, cy = (allv[:, 0].min() + allv[:, 0].max()) / 2, (allv[:, 1].min() + allv[:, 1].max()) / 2
+        zmin = allv[:, 2].min()
+        for part in obj.parts:
+            pid = next_id
+            next_id += 1
+            part_ids.append(pid)
+            v = part.mesh.vertices - (cx, cy, zmin)
+            sub_lines.append(f'  <object id="{pid}" p:UUID="{uuid.uuid4()}" type="model">')
+            sub_lines.append("   <mesh>\n    <vertices>")
+            sub_lines.extend(f'     <vertex x="{_f(x)}" y="{_f(y)}" z="{_f(z)}"/>' for x, y, z in v)
+            sub_lines.append("    </vertices>\n    <triangles>")
+            sub_lines.extend(f'     <triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in part.mesh.faces)
+            sub_lines.append("    </triangles>\n   </mesh>\n  </object>")
+            comps.append(f'    <component p:path="{sub}" objectid="{pid}" p:UUID="{uuid.uuid4()}" transform="{IDENTITY}"/>')
+        sub_lines.append(" </resources>\n <build/>\n</model>")
+        files[sub.lstrip("/")] = "\n".join(sub_lines)
+        rels.append(sub)
+
+        oid = next_id
+        next_id += 1
+        root_objs.append(f'  <object id="{oid}" p:UUID="{uuid.uuid4()}" type="model">\n   <components>\n'
+                         + "\n".join(comps) + "\n   </components>\n  </object>")
+        ox, oy = plate_origin(obj.plate)
+        tx, ty = ox + obj.x, oy + obj.y
+        build_items.append(f'  <item objectid="{oid}" p:UUID="{uuid.uuid4()}" '
+                           f'transform="1 0 0 0 1 0 0 0 1 {_f(tx)} {_f(ty)} 0" printable="1"/>')
+        plates.setdefault(obj.plate, []).append((oid, identify))
+        identify += 1
+
+        cfg.append(f' <object id="{oid}">')
+        cfg.append(f'  <metadata key="name" value={quoteattr(obj.name)}/>')
+        cfg.append(f'  <metadata key="extruder" value="{obj.parts[0].extruder}"/>')
+        for k, val in settings.items():
+            cfg.append(f'  <metadata key="{k}" value={quoteattr(str(val))}/>')
+        for pid, part in zip(part_ids, obj.parts):
+            cfg.append(f'  <part id="{pid}" subtype="normal_part">')
+            cfg.append(f'   <metadata key="name" value={quoteattr(part.name)}/>')
+            cfg.append('   <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>')
+            cfg.append(f'   <metadata key="extruder" value="{part.extruder}"/>')
+            cfg.append('   <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" '
+                       'facets_reversed="0" backwards_edges="0"/>')
+            cfg.append("  </part>")
+        cfg.append(" </object>")
+
+    names = {1: "Body / גוף", 2: "Keycaps / כובעים"}
+    for plate in sorted(plates):
+        cfg.append(" <plate>")
+        cfg.append(f'  <metadata key="plater_id" value="{plate}"/>')
+        cfg.append(f'  <metadata key="plater_name" value={quoteattr(names.get(plate, ""))}/>')
+        cfg.append('  <metadata key="locked" value="false"/>')
+        for oid, ident in plates[plate]:
+            cfg.append("  <model_instance>")
+            cfg.append(f'   <metadata key="object_id" value="{oid}"/>')
+            cfg.append('   <metadata key="instance_id" value="0"/>')
+            cfg.append(f'   <metadata key="identify_id" value="{ident}"/>')
+            cfg.append("  </model_instance>")
+        cfg.append(" </plate>")
+    cfg.append("</config>")
+
+    model = ['<?xml version="1.0" encoding="UTF-8"?>', f'<model unit="millimeter" xml:lang="en-US" {NS}>',
+             f' <metadata name="Application">{APP}</metadata>',
+             ' <metadata name="BambuStudio:3mfVersion">1</metadata>',
+             f' <metadata name="Title">{title}</metadata>',
+             " <resources>", *root_objs, " </resources>",
+             f' <build p:UUID="{uuid.uuid4()}">', *build_items, " </build>", "</model>"]
+
+    content_types = ('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/'
+                     'package/2006/content-types">\n <Default Extension="rels" ContentType="application/'
+                     'vnd.openxmlformats-package.relationships+xml"/>\n <Default Extension="model" ContentType='
+                     '"application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n <Default Extension="config" '
+                     'ContentType="text/xml"/>\n</Types>')
+    root_rels = ('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/'
+                 'package/2006/relationships">\n <Relationship Target="/3D/3dmodel.model" Id="rel-1" '
+                 'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n</Relationships>')
+    model_rels = ['<?xml version="1.0" encoding="UTF-8"?>',
+                  '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">']
+    model_rels += [f' <Relationship Target="{r}" Id="rel-{i}" '
+                   f'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+                   for i, r in enumerate(rels, start=1)]
+    model_rels.append("</Relationships>")
+
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", content_types)
+        z.writestr("_rels/.rels", root_rels)
+        z.writestr("3D/3dmodel.model", "\n".join(model))
+        z.writestr("3D/_rels/3dmodel.model.rels", "\n".join(model_rels))
+        for name, text in files.items():
+            z.writestr(name, text)
+        z.writestr("Metadata/model_settings.config", "\n".join(cfg))

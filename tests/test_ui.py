@@ -107,3 +107,30 @@ def test_symbols_page_and_blank_sides(app):
     assert any(k.kind == "symbol" and k.value == "crown" for k in w.ctl.project.keys)
     assert w.ctl.result.ok and "key01" in w.ctl.result.legend_boxes
     w.close()
+
+
+def test_symbol_apply_any_order_and_customer_library(app, tmp_path):
+    from printyz_clicker.geometry.symbols import SymbolLibrary
+
+    set_language("he")
+    w = MainWindow()
+    w.show()
+    w.ctl.wait_idle()
+    sp = next(p for _, p, _ in w.pages if p.__class__.__name__ == "SymbolsPage")
+    sp.library = SymbolLibrary(tmp_path / "s.json")
+    w.nav.setCurrentRow(next(i for i, (_, p, _) in enumerate(w.pages) if p is sp))
+    app.processEvents()
+    key = w.ctl.project.keys[0]
+    sp.buttons["crown_queen"].click()          # symbol first ...
+    sp.strip._pick(key.id)                     # ... then the key
+    assert sp.apply_btn.isEnabled()
+    sp.apply_btn.click()
+    w.ctl.wait_idle()
+    assert w.ctl.project.key_by_id(key.id).value == "crown_queen" and w.ctl.result.ok
+    # developer hides a symbol -> customer mode does not offer it
+    sp.library.set_visible("cat", False)
+    w.mode.setCurrentIndex(1)
+    app.processEvents()
+    sp._rebuild_grid()
+    assert "cat" not in sp.buttons and "heart" in sp.buttons
+    w.close()

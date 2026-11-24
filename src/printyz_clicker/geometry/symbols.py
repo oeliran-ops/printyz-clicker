@@ -55,6 +55,16 @@ def crown():
     return body + tips + band
 
 
+def crown_queen():
+    """Tiara: an arched band with a tall central peak, a jewel and two side peaks (one piece)."""
+    arc = (Sketch() + Pos(0, -9.2) * Circle(8.6)) - Pos(0, -9.2) * Circle(7.0)
+    arc = arc & (Pos(0, -1.5) * Rectangle(11.0, 5.0))
+    peaks = _poly((-4.7, -2.4), (-3.7, 2.0), (-2.2, 0.7), (0, 3.6), (2.2, 0.7), (3.7, 2.0), (4.7, -2.4), (0, -0.9))
+    pearls = Pos(-3.7, 2.5) * Circle(0.8) + Pos(3.7, 2.5) * Circle(0.8) + Pos(0, 4.3) * Circle(1.0)
+    jewel = Pos(0, 1.2) * Rot(0, 0, 45) * Rectangle(1.4, 1.4)
+    return (arc + peaks + pearls) - jewel
+
+
 def moon():
     return Sketch() + Circle(5) - Pos(2.3, 1.4) * Circle(4.1)
 
@@ -197,7 +207,8 @@ def cat():
 
 SYMBOLS: dict[str, tuple[str, str, object]] = {
     # id: (Hebrew name, English name, builder)
-    "heart": ("לב", "Heart", heart), "star": ("כוכב", "Star", star), "crown": ("כתר", "Crown", crown),
+    "heart": ("לב", "Heart", heart), "star": ("כוכב", "Star", star), "crown": ("כתר מלך", "King crown", crown),
+    "crown_queen": ("כתר מלכה", "Queen crown", crown_queen),
     "magen_david": ("מגן דוד", "Star of David", magen_david), "moon": ("ירח", "Moon", moon),
     "sun": ("שמש", "Sun", sun), "bolt": ("ברק", "Lightning", bolt), "drop": ("טיפה", "Drop", flame),
     "music": ("תו", "Music", music), "paw": ("כף רגל", "Paw", paw), "cat": ("חתול", "Cat", cat),
@@ -306,3 +317,29 @@ def svg_sketch(path: str) -> tuple[Sketch, list[str]]:
 def svg_cache_key(path: str) -> tuple[str, float]:
     p = Path(path)
     return str(p), p.stat().st_mtime if p.exists() else 0.0
+
+
+# ---------------------------------------------------------------------------------------------
+class SymbolLibrary:
+    """Which built-in symbols customers may use (developer setting, stored as JSON)."""
+
+    def __init__(self, path: Path | None = None):
+        import json
+
+        self.path = path
+        self.hidden: set[str] = set()
+        if path and path.exists():
+            try:
+                self.hidden = set(json.loads(path.read_text("utf-8")).get("hidden", []))
+            except Exception:  # noqa: BLE001 - a broken settings file must not block the app
+                self.hidden = set()
+
+    def visible(self, sid: str) -> bool:
+        return sid not in self.hidden
+
+    def set_visible(self, sid: str, on: bool) -> None:
+        import json
+
+        (self.hidden.discard if on else self.hidden.add)(sid)
+        if self.path:
+            self.path.write_text(json.dumps({"hidden": sorted(self.hidden)}, indent=1), "utf-8")

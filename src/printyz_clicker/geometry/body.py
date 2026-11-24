@@ -115,38 +115,57 @@ def _keychain(outline, spec: KeychainSpec, mech: MechanicalProfile, warnings: li
     surface = {"top": bb.max.Y, "bottom": -bb.min.Y, "right": bb.max.X, "left": -bb.min.X}[spec.side]
     half_span = {"top": bb.size.X, "bottom": bb.size.X, "left": bb.size.Y, "right": bb.size.Y}[spec.side] / 2
     r_hole = spec.hole_diameter / 2
-    end_wall = 2.0
     root = 2.0
-    lim = max(0.0, half_span - spec.width / 2 - 1.0)
-    off = min(max(spec.offset, -lim), lim)
-    if off != spec.offset:
-        warnings.append("מיקום מחזיק המפתחות הוגבל לאורך הצלע. / keychain offset clamped.")
-    if spec.side in ("bottom", "right"):
-        off = -off  # keep +offset = +X / +Y after rotation
-    hole_d = spec.length - r_hole - end_wall
-    if hole_d - r_hole < 1.2:
-        warnings.append("החור קרוב מדי לגוף — הלשונית הוארכה. / tab lengthened to keep 1.2 mm wall.")
-        hole_d = r_hole + 1.2
-    length = max(spec.length, hole_d + r_hole + end_wall)
-    if spec.width < spec.hole_diameter + 2 * 1.6:
-        warnings.append("לשונית צרה מדי לקוטר החור. / tab too narrow for hole.")
-
-    tab2d = Pos(off, surface + (length - root) / 2) * RectangleRounded(
-        spec.width, length + root, min(spec.corner_radius, spec.width / 2 - 0.05))
+    MIN_RING, MIN_BODY, MIN_THICK = 2.0, 1.5, 3.0      # strength rules for every shape
+    width = spec.width
+    off = -spec.offset if spec.side in ("bottom", "right") else spec.offset   # +offset = +X / +Y after rotation
+    # the tab must sit on ONE straight stretch of the outer wall (e.g. WASD: not over the empty corner)
+    a = math.radians(-angle)
+    wire = outline.faces()[0].outer_wire()
+    pts = [(q.X * math.cos(a) - q.Y * math.sin(a), q.X * math.sin(a) + q.Y * math.cos(a))
+           for q in wire.positions([i / 400 for i in range(400)])]
+    edge = [x for x, y in pts if y > surface - 0.02]
+    margin = width / 2 + spec.root_radius
+    lo_t, hi_t = (min(edge) + margin, max(edge) - margin) if edge else (-half_span, half_span)
+    if lo_t > hi_t:
+        lo_t = hi_t = (min(edge) + max(edge)) / 2 if edge else 0.0
+        warnings.append("הצלע קצרה מרוחב המחזיק — מומלץ צד אחר או מחזיק צר יותר. / side too short for the tab.")
+    clamped = min(max(off, lo_t), hi_t)
+    if abs(clamped - off) > 1e-6:
+        warnings.append("מחזיק המפתחות הוזז כדי לשבת על דופן רציפה. / keychain moved onto a continuous wall.")
+    off = clamped
+    if width < spec.hole_diameter + 2 * MIN_RING:
+        width = spec.hole_diameter + 2 * MIN_RING
+        warnings.append(f"הלשונית הורחבה ל-{width:.1f} מ\"מ כדי להשאיר 2 מ\"מ סביב החור. / tab widened for a 2 mm ring.")
+    if spec.thickness < MIN_THICK:
+        warnings.append(f"עובי המחזיק הוגדל ל-{MIN_THICK} מ\"מ לחוזק. / tab thickness raised to {MIN_THICK} mm.")
+    thickness = max(spec.thickness, MIN_THICK)
+    if spec.shape == "round":
+        corner = width / 2 - 0.05                      # full semicircle end, hole concentric with it
+        hole_d = max(spec.length - width / 2, r_hole + MIN_BODY)
+        length = hole_d + width / 2
+    else:
+        corner = min(spec.corner_radius if spec.shape == "rounded" else 1.0, width / 2 - 0.05)
+        hole_d = max(spec.length - r_hole - MIN_RING, r_hole + MIN_BODY)
+        length = hole_d + r_hole + MIN_RING
+    if length > spec.length + 1e-6:
+        warnings.append(f"הלשונית הוארכה ל-{length:.1f} מ\"מ לשמירת חוזק. / tab lengthened to {length:.1f} mm.")
+    tab2d = Pos(off, surface + (length - root) / 2) * RectangleRounded(width, length + root, corner)
     rot = Rot(0, 0, angle)
     merged = outline + rot * tab2d
     rr = spec.root_radius
     merged = offset(offset(merged, rr, kind=Kind.ARC), -rr, kind=Kind.ARC)
     window = rot * (Pos(off, surface + (length - 3 * root) / 2) * Rectangle(
-        spec.width + 2 * rr + 2.0, length + 3 * root))
+        width + 2 * rr + 2.0, length + 3 * root))
     region = merged & window
-    tab = extrude(region, spec.thickness)
+    tab = extrude(region, thickness)
     hx, hy = off, surface + hole_d
     a = math.radians(angle)
     wx, wy = hx * math.cos(a) - hy * math.sin(a), hx * math.sin(a) + hy * math.cos(a)
-    hole = Pos(wx, wy, -1) * Cylinder(r_hole, spec.thickness + 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    hole = Pos(wx, wy, -1) * Cylinder(r_hole, thickness + 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
     rx, ry = off * math.cos(a) - surface * math.sin(a), off * math.sin(a) + surface * math.cos(a)
-    return tab, hole, (wx, wy), (rx, ry, spec.width / 2 + spec.root_radius + 1.5)
+    # texture exclusion: around the tab root, only up to the tab top (+1 mm)
+    return tab, hole, (wx, wy), (rx, ry, width / 2 + spec.root_radius + 1.0, thickness + 1.0)
 
 
 def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign,

@@ -91,10 +91,12 @@ class MainWindow(QMainWindow):
         self._add_page("body", tr("גוף", "Body"), BodyPage(self.ctl))
         self.colors_page = ColorsPage(self.ctl)
         self._add_page("palette", tr("צבעים", "Colours"), self.colors_page)
-        self._add_page("symbol", tr("סמלים", "Symbols"), SymbolsPage(self.ctl))
+        from ..geometry.symbols import SymbolLibrary
+
+        self._add_page("symbol", tr("סמלים", "Symbols"), SymbolsPage(self.ctl, SymbolLibrary(data_dir() / "symbols.json")))
         self._add_page("keychain", tr("מחזיק", "Keychain"), KeychainPage(self.ctl))
         self._add_page("mech", tr("מכאני", "Fit"), MechanicalPage(self.ctl), dev_only=True)
-        self.export_page = ExportPage(self.ctl, self.export)
+        self.export_page = ExportPage(self.ctl, self.export, data_dir() / "print_settings.json")
         self._add_page("export", tr("ייצוא", "Export"), self.export_page)
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.setCurrentRow(0)
@@ -364,7 +366,7 @@ class MainWindow(QMainWindow):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             rep = validate(res)  # full check incl. watertight meshes before writing files
-            out = export_all(res, rep, folder, formats)
+            out = export_all(res, rep, folder, formats, self.export_page.settings)
             if previews:
                 from ..render.preview import render_set
                 render_set(res, out / "Exports" / "Preview")

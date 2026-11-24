@@ -61,35 +61,49 @@ def build_cutters(outline, params: TextureParams, z0: float, z1: float, exclude:
     if k == "smooth" or d <= 0:
         return None
 
-    def keep(p) -> bool:
-        return all(math.hypot(p[0] - ex, p[1] - ey) > er for ex, ey, er in exclude)
+    def keep(p, z: float | None = None) -> bool:
+        """False only inside a keychain-tab zone (in plan AND below the tab top)."""
+        for ex, ey, er, ez in exclude:
+            if math.hypot(p[0] - ex, p[1] - ey) <= er and (z is None or z <= ez):
+                return False
+        return True
 
     cutters: list[Manifold] = []
     if k == "ribs":
+        # rounded (half-round) grooves built from stacked ring slices: they read from every angle
         pts, _, _ = _perimeter(outline, 0.4)
         cs = CrossSection([pts.tolist()])
         if cs.area() <= 0:                      # clockwise loop: the default fill rule drops it
             cs = CrossSection([pts[::-1].tolist()])
-        ring = cs - cs.offset(-d, JoinType.Round)
-        groove = u * 0.45
+        outside = cs.offset(0.3, JoinType.Round)   # start outside: coincident faces could leave a skin
+        groove = u * 0.5
+        slices = 7
         z = z0
         while z + groove <= z1 + 1e-6:
-            cutters.append(ring.extrude(groove).translate((0, 0, z)))
+            for i in range(slices):
+                t = (i + 0.5) / slices * 2 - 1              # -1 .. 1 across the groove height
+                dd = d * math.sqrt(max(0.0, 1 - t * t))
+                if dd < 0.05:
+                    continue
+                ring = outside - cs.offset(-dd, JoinType.Round)
+                cutters.append(ring.extrude(groove / slices + 0.002).translate((0, 0, z + i * groove / slices)))
             z += u
         rings = Manifold.batch_boolean(cutters, OpType.Add)
-        # remove ring material where the keychain tab joins the body
-        for ex, ey, er in exclude:
-            rings = rings - Manifold.cylinder(z1 + 2, er, er, 32).translate((ex, ey, -1))
+        for ex, ey, er, ez in exclude:            # keep the tab root solid, texture continues above it
+            rings = rings - Manifold.cylinder(ez + 1, er, er, 48).translate((ex, ey, -1))
         return rings
 
     if k == "fluted":
         pts, nrm, _ = _perimeter(outline, u)
         r = u * 0.38
         for p, n in zip(pts, nrm):
-            if not keep(p):
-                continue
-            c = p - n * (d - r) if r > d else p + n * (r - d)
-            cutters.append(Manifold.cylinder(z1 - z0, r, r, 16).translate((float(c[0]), float(c[1]), z0)))
+            c = p + n * (r - d)
+            start = z0
+            for ex, ey, er, ez in exclude:          # flute starts above the keychain tab
+                if math.hypot(p[0] - ex, p[1] - ey) <= er:
+                    start = max(start, ez)
+            if z1 - start > 1.0:
+                cutters.append(Manifold.cylinder(z1 - start, r, r, 16).translate((float(c[0]), float(c[1]), start)))
     elif k == "dots":
         pts, nrm, _ = _perimeter(outline, u / 2)
         r = u * 0.34
@@ -97,7 +111,7 @@ def build_cutters(outline, params: TextureParams, z0: float, z1: float, exclude:
         while z <= z1 - r + 1e-6:
             for i in range(row % 2, len(pts), 2):
                 p, n = pts[i], nrm[i]
-                if keep(p):
+                if keep(p, z - r):
                     c = p + n * (r - d)
                     cutters.append(_sphere((c[0], c[1], z), r))
             z += u * 0.866          # hexagonal row spacing
@@ -109,7 +123,7 @@ def build_cutters(outline, params: TextureParams, z0: float, z1: float, exclude:
         while z <= z1 - a + 1e-6:
             for i in range(row % 2, len(pts), 2):
                 p, n = pts[i], nrm[i]
-                if not keep(p):
+                if not keep(p, z - a):
                     continue
                 t = np.array([-n[1], n[0]])
                 out = p + n * 0.3
@@ -132,7 +146,7 @@ def build_cutters(outline, params: TextureParams, z0: float, z1: float, exclude:
                 p, n = pts[j], nrm[j]
                 zz = z + (amp if i % 2 else -amp)
                 c = (*(p + n * (r - d)), zz)
-                if prev is not None and keep(p) and keep(prev[1]):
+                if prev is not None and keep(p, zz - amp - r) and keep(prev[1], zz - amp - r):
                     cutters.append(Manifold.batch_hull([_sphere(prev[0], r), _sphere(c, r)]))
                 prev = (c, p)
             z += u * 1.1

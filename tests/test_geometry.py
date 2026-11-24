@@ -160,3 +160,69 @@ def test_textures_cut_outside_only(tex):
     inner = np.abs(m.vertices[:, :2]).max(axis=1) < 20.75 / 2 + 0.01
     assert validate(res, mesh_checks=True).passed
     assert inner.any()
+
+
+def test_ribs_cut_all_around_including_ends():
+    from printyz_clicker.geometry.texture import _to_manifold
+
+    res = build_project(make("abcd", body__texture="ribs"), include_switches=False)
+    m = _to_manifold(res.body.mesh)
+    b = res.mech.body
+    z_groove = b.edge_fillet + 0.6 + 2.4 * 0.25          # inside the first rounded groove
+    smooth = m.slice(b.edge_fillet + 0.6 + 2.4 * 0.75).bounds()
+    groove = m.slice(z_groove).bounds()
+    assert groove[2] < smooth[2] - 0.3 and groove[3] < smooth[3] - 0.3     # ends AND sides are cut
+
+
+def test_texture_continues_above_keychain_tab():
+    from printyz_clicker.geometry.texture import _to_manifold
+
+    p = make("ab", body__texture="ribs")
+    p.keychain.enabled = True                       # tab on the top side, centred at x = 0
+    res = build_project(p, include_switches=False)
+    m = _to_manifold(res.body.mesh)
+    b = res.mech.body
+    z0, u = b.edge_fillet + 0.6, 2.4
+    k = next(k for k in range(10) if z0 + k * u > p.keychain.thickness + 1.0)
+    z = z0 + k * u + u * 0.25                       # middle of a groove above the tab
+    outer_y = max(pt[1] for poly in m.slice(z).to_polygons() for pt in poly if abs(pt[0]) < 1.0)
+    assert outer_y < 11.9 - 0.3                     # the wall right above the tab root IS textured
+    assert validate(res, mesh_checks=True).passed
+
+
+@pytest.mark.parametrize("shape", ["rounded", "round", "square"])
+def test_keychain_shapes_strong(shape):
+    p = make("ab")
+    p.keychain.enabled, p.keychain.shape = True, shape
+    p.keychain.width, p.keychain.thickness = 8.0, 2.0            # too weak on purpose -> corrected
+    res = build_project(p, include_switches=False)
+    assert res.ok and any("2 מ\"מ" in w or "3" in w for w in res.warnings)
+    assert len(res.body.solid.solids()) == 1
+    assert res.body.solid.bounding_box().size.Z >= 17.6
+    assert validate(res, mesh_checks=False).passed
+
+
+def test_queen_and_king_crowns_differ():
+    from printyz_clicker.geometry.symbols import symbol_sketch
+
+    a, b = symbol_sketch("crown"), symbol_sketch("crown_queen")
+    assert abs(sum(f.area for f in a.faces()) - sum(f.area for f in b.faces())) > 2.0
+
+
+def test_bambu_project_two_plates_and_settings(tmp_path):
+    import re
+    import zipfile
+
+    from printyz_clicker.export.exporter import export_all
+
+    res = build_project(make("Hi"), include_switches=False)
+    out = export_all(res, validate(res), tmp_path, ("3mf",))
+    with zipfile.ZipFile(out / "Exports" / "t_bambu.3mf") as z:
+        cfg = z.read("Metadata/model_settings.config").decode()
+        model = z.read("3D/3dmodel.model").decode()
+    assert re.findall(r'plater_id" value="(\d)"', cfg) == ["1", "2"]
+    plate1 = cfg.split("<plate>")[1]
+    assert plate1.count("<model_instance>") == 1                           # body alone on plate 1
+    assert cfg.split("<plate>")[2].count("<model_instance>") == 2           # two keycaps on plate 2
+    assert 'key="wall_generator" value="arachne"' in cfg and 'key="outer_wall_speed" value="60"' in cfg
+    assert "BambuStudio" in model

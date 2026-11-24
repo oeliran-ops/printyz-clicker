@@ -76,6 +76,7 @@ class BodyDesign:
 @dataclass
 class KeychainSpec:
     enabled: bool = False
+    shape: Literal["rounded", "round", "square"] = "rounded"   # rounded rect / semicircle end / square
     side: Literal["top", "bottom", "left", "right"] = "top"
     offset: float = 0.0          # along the side, from the body centre
     hole_diameter: float = 5.2
