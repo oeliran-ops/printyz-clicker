@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass, field
 
 from build123d import Pos
 
-from ..export.mesh import mesh_health, tessellate
-from ..geometry.builder import BuildResult
+from ..export.mesh import mesh_health
+from ..geometry.builder import BuildResult, part_mesh
 from ..geometry.lettering import MIN_MARGIN
 
 OK, WARN, ERROR = "ok", "warning", "error"
@@ -57,7 +57,7 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
     if not res.ok:
         return rep
     p = res.project
-    mech = p.mechanical
+    mech = res.mech or p.mechanical
     b, sw, st = mech.body, mech.switch, res.style
     for w in res.warnings:
         rep.add("build", WARN, w)
@@ -132,11 +132,15 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
             if tiny:
                 rep.add(f"{pt.name} detail", WARN, f"{len(tiny)} island(s) under 0.5 mm³ may not print")
         if mesh_checks:
-            h = mesh_health(tessellate(pt.solid))
+            h = mesh_health(part_mesh(pt))
             good = (h["watertight"] and h["winding_consistent"] and h["volume"] > 0
                     and (h["bodies"] == nsol))
             rep.add(f"{pt.name} mesh", OK if good else ERROR,
                     f"watertight={h['watertight']} bodies={h['bodies']} vol={h['volume']:.1f} mm³")
+    if p.body.texture != "smooth":
+        tex_ok = res.body.mesh is not None
+        rep.add("texture / טקסטורה", OK if tex_ok else ERROR,
+                f"{p.body.texture}, depth ≤ {b.outer_wall - 0.9:.2f} mm, outside wall only (pockets untouched)")
     if p.keychain.enabled:
         rep.add("keychain / מחזיק מפתחות", OK if len(body.solid.solids()) == 1 else ERROR,
                 "tab fused to body (single solid); strength needs a physical pull test")

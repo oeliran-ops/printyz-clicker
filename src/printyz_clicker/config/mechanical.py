@@ -157,4 +157,26 @@ class MechanicalProfile:
         )
 
 
+def keycap_with_height(style: KeycapStyle, height: float | None) -> KeycapStyle:
+    """Lower a keycap: first shorten stem-to-top (keeping socket depth + 0.3 mm), then the skirt.
+
+    Raising above the style height is not allowed (the socket position is fixed by the switch).
+    """
+    import dataclasses
+
+    if height is None or height >= style.height:
+        return style
+    delta = style.height - height
+    slack_top = max(0.0, style.stem_length - (style.socket_depth + 0.3))
+    from_top = min(delta, slack_top)
+    from_skirt = delta - from_top
+    if from_skirt > style.stem_offset:
+        raise ValueError(f"Keycap height {height:.2f} mm is below the minimum {min_keycap_height(style):.2f} mm")
+    return dataclasses.replace(style, height=height, stem_offset=style.stem_offset - from_skirt)
+
+
+def min_keycap_height(style: KeycapStyle) -> float:
+    return style.top_thickness + style.socket_depth + 0.3
+
+
 DEFAULT_PROFILE = MechanicalProfile()

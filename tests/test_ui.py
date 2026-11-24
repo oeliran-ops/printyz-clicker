@@ -51,3 +51,27 @@ def test_window_builds_and_tracks_edits(app):
     hidden = [w.nav.item(i).isHidden() for i in range(w.nav.count())]
     assert any(hidden)
     w.close()
+
+
+def test_undo_redo(app):
+    set_language("he")
+    w = MainWindow()
+    w.ctl.wait_idle()
+    w.ctl._hist_timer.setInterval(1)
+    first = w.ctl.project.text
+    w.pages[0][1].name.setText("Dan")
+    w.ctl._commit_history()
+    w.ctl.project.body.texture = "ribs"
+    w.ctl.touch()
+    w.ctl._commit_history()
+    w.ctl.undo()
+    assert w.ctl.project.body.texture == "smooth" and w.ctl.project.text == "Dan"
+    w.ctl.undo()
+    assert w.ctl.project.text == first
+    w.ctl.redo()
+    w.ctl.redo()
+    assert w.ctl.project.body.texture == "ribs"
+    w.ctl.wait_idle()
+    assert w.ctl.result.ok and w.ctl.result.body.mesh is not None   # texture really in the geometry
+    assert w.pages[0][1].name.text() == "Dan"                          # UI follows the restored project
+    w.close()

@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self.nav.setGridSize(QSize(98, 64))
         self.nav.setSpacing(0)
         self.nav.setWordWrap(True)
+        self.nav.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.stack = QStackedWidget()
         self.stack.setFixedWidth(400)
         self.stack.setObjectName("SidePanel")
@@ -88,7 +89,8 @@ class MainWindow(QMainWindow):
         self._add_page("legend", tr("כיתוב", "Lettering"), LetteringPage(self.ctl))
         self._add_page("keycap", tr("מקשים", "Keycaps"), KeycapPage(self.ctl))
         self._add_page("body", tr("גוף", "Body"), BodyPage(self.ctl))
-        self._add_page("palette", tr("צבעים", "Colours"), ColorsPage(self.ctl))
+        self.colors_page = ColorsPage(self.ctl)
+        self._add_page("palette", tr("צבעים", "Colours"), self.colors_page)
         self._add_page("symbol", tr("סמלים", "Symbols"), PlaceholderPage(
             tr("סמלים ו־SVG", "Symbols & SVG"),
             tr("ספריית סמלים וייבוא SVG עדיין לא ממומשים בגיאומטריה. בינתיים אפשר להשאיר מקש ריק "
@@ -121,6 +123,12 @@ class MainWindow(QMainWindow):
         self.ctl.built.connect(self._on_built)
         self.ctl.build_failed.connect(self._on_failed)
         self.ctl.changed.connect(self._update_title)
+        self.ctl.history_changed.connect(self._history)
+        from PySide6.QtGui import QKeySequence, QShortcut
+
+        QShortcut(QKeySequence.Undo, self, activated=self.ctl.undo)
+        QShortcut(QKeySequence.Redo, self, activated=self.ctl.redo)
+        QShortcut(QKeySequence("Ctrl+Y"), self, activated=self.ctl.redo)
         self._apply_mode()
         if not self.ctl.project.text:
             self.ctl.set_text("PRINTYZ" if language() == "en" else "שלום")
@@ -167,6 +175,18 @@ class MainWindow(QMainWindow):
         dl.setMinimumHeight(42)
         dl.clicked.connect(lambda: self.export(Path(self.export_page.folder.text()), ("3mf", "stl", "step"), True))
         v.addWidget(dl)
+        hist = QHBoxLayout()
+        self.undo_btn = QPushButton("↶ " + tr("בטל", "Undo"))
+        self.undo_btn.setToolTip("Ctrl+Z")
+        self.redo_btn = QPushButton(tr("בצע שוב", "Redo") + " ↷")
+        self.redo_btn.setToolTip("Ctrl+Y")
+        self.undo_btn.clicked.connect(self.ctl.undo)
+        self.redo_btn.clicked.connect(self.ctl.redo)
+        self.undo_btn.setEnabled(False)
+        self.redo_btn.setEnabled(False)
+        hist.addWidget(self.undo_btn)
+        hist.addWidget(self.redo_btn)
+        v.addLayout(hist)
         h = QHBoxLayout()
         for ic, text, fn in (("save", tr("שמור", "Save"), self.save), ("open", tr("פתח", "Open"), self.open)):
             b = QPushButton(icon(ic), " " + text)
@@ -204,7 +224,7 @@ class MainWindow(QMainWindow):
         frame.setObjectName("ViewerFrame")
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(2, 2, 2, 2)
-        self.viewer = Viewer3D(frame)
+        self.viewer = Viewer3D(frame, on_pick=self._pick_part)
         fl.addWidget(self.viewer.interactor if hasattr(self.viewer, "interactor") else self.viewer)
         v.addWidget(frame, 1)
         self.overlay = QLabel("")
@@ -226,8 +246,26 @@ class MainWindow(QMainWindow):
         self.pages.append((ic, page, dev_only))
 
     # ---- behaviour ---------------------------------------------------------------------------
+    def _history(self, can_undo: bool, can_redo: bool) -> None:
+        self.undo_btn.setEnabled(can_undo)
+        self.redo_btn.setEnabled(can_redo)
+        self.proj_name.setText(self.ctl.project.name)
+
+    def _pick_part(self, role: str, key_id) -> None:
+        """Click on the 3D model -> open the colour picker for that part."""
+        row = next(i for i, (_, page, _) in enumerate(self.pages) if page is self.colors_page)
+        self.nav.setCurrentRow(row)
+        cp = self.colors_page
+        if role == "body":
+            cp.body._open()
+        elif role in ("cap", "legend") and key_id:
+            cp.strip.current = key_id
+            cp.refresh()
+            (cp.kcap if role == "cap" else cp.kleg)._open()
+
     def _rename(self, t: str) -> None:
         self.ctl.project.name = t or "Untitled"
+        self.ctl.touch()
 
     def _update_title(self) -> None:
         self.setWindowTitle(f"PRINTYZ Clicker Studio — {self.ctl.project.name}")

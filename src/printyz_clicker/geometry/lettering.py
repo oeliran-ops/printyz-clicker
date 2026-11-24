@@ -43,7 +43,8 @@ def fit_scale(boxes: list[tuple[float, float]], legend_area: float, spec: Letter
         return 0.0, warnings
     fit = min(min(avail / w, avail / h) for w, h in boxes)
     if spec.size is None:
-        return fit, warnings
+        pct = min(max(spec.size_pct, 10.0), 100.0)
+        return fit * pct / 100.0, warnings
     want = spec.size / max(h for _, h in boxes)
     if want > fit:
         tallest = max(h for _, h in boxes) * fit
@@ -66,7 +67,7 @@ def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringS
         warnings.append(f"שוליים {margin} מחוץ לטווח 1–3.5 — הוגדר {clamped}. / margin clamped to {clamped}.")
         margin = clamped
     avail = legend_area - 2 * margin
-    ew = max(0.0, spec.extra_weight)
+    ew = max(-0.3, spec.extra_weight)
 
     base = Text(char, font_size=10.0, font_path=font_path, align=(Align.CENTER, Align.CENTER))
     if not base.faces():
@@ -84,6 +85,16 @@ def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringS
         sk = offset(sk, amount=ew, kind=Kind.ARC)
         if _counters(sk) < before:
             warnings.append("העיבוי סגר חלל פנימי באות. / extra weight closed a counter.")
+    elif ew < 0:
+        area0 = sum(f.area for f in sk.faces())
+        try:
+            thin = offset(sk, amount=ew, kind=Kind.ARC)
+        except Exception:  # noqa: BLE001
+            thin = None
+        if thin is None or not thin.faces() or sum(f.area for f in thin.faces()) < 0.4 * area0:
+            warnings.append("הדילול מוחק חלקים מהאות — נשאר המשקל המקורי. / thinning would erase strokes; ignored.")
+        else:
+            sk = thin
     # exact centring on the glyph bounding box (fonts carry side bearings)
     bb = sk.bounding_box()
     sk = Pos(-bb.center().X, -bb.center().Y) * sk

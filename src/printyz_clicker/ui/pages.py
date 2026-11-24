@@ -69,6 +69,111 @@ class KeyStrip(QWidget):
         self.selected.emit(kid)
 
 
+
+LAYOUT_ICONS = {
+    "row": [(0, 0), (0, 1), (0, 2), (0, 3)],
+    "column": [(0, 0), (1, 0), (2, 0)],
+    "grid": [(r, c) for r in range(3) for c in range(3)],
+    "wasd": [(0, 1), (1, 0), (1, 1), (1, 2)],
+    "arrows": [(0, 1), (1, 0), (1, 2), (2, 1)],
+    "custom": [(0, 0), (0, 1), (1, 1), (1, 2), (2, 0), (2, 2)],
+}
+
+
+def layout_pixmap(style: str, size: int = 64):
+    from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+
+    cells = LAYOUT_ICONS[style]
+    rows = max(r for r, _ in cells) + 1
+    cols = max(c for _, c in cells) + 1
+    pm = QPixmap(size * 2, size * 2)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    u = size * 2 / max(rows, cols, 3) * 0.82
+    ox = (size * 2 - cols * u) / 2
+    oy = (size * 2 - rows * u) / 2
+    for r in range(rows):
+        for c in range(cols):
+            x, y = ox + c * u + u * 0.08, oy + r * u + u * 0.08
+            if (r, c) in cells:
+                p.setPen(QPen(QColor("#7B8494"), 2))
+                p.setBrush(QColor("#CDD3DC"))
+                p.drawRoundedRect(x, y, u * 0.84, u * 0.84, u * 0.18, u * 0.18)
+            elif style == "custom":
+                pen = QPen(QColor("#A6AEBB"), 2, Qt.DashLine)
+                p.setPen(pen)
+                p.setBrush(Qt.NoBrush)
+                p.drawRoundedRect(x, y, u * 0.84, u * 0.84, u * 0.18, u * 0.18)
+    p.end()
+    return pm
+
+
+class IconCard(QFrame):
+    clicked = Signal(str)
+
+    def __init__(self, key: str, title: str, pixmap):
+        super().__init__()
+        self.key = key
+        self.setObjectName("Card")
+        self.setCursor(Qt.PointingHandCursor)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(6, 8, 6, 8)
+        pic = QLabel()
+        pic.setAlignment(Qt.AlignCenter)
+        pic.setPixmap(pixmap.scaledToHeight(54, Qt.SmoothTransformation))
+        v.addWidget(pic)
+        t = QLabel(title)
+        t.setAlignment(Qt.AlignCenter)
+        t.setStyleSheet("font-weight: 600;")
+        v.addWidget(t)
+
+    def set_selected(self, on: bool) -> None:
+        self.setProperty("selected", "true" if on else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def mousePressEvent(self, e):  # noqa: N802
+        self.clicked.emit(self.key)
+
+
+class Stepper(QWidget):
+    """[ − ] value [ + ] control."""
+
+    changed = Signal(int)
+
+    def __init__(self, lo: int, hi: int):
+        super().__init__()
+        self.lo, self.hi, self.v = lo, hi, lo
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        self.minus = QPushButton("−")
+        self.plus = QPushButton("+")
+        self.lab = QLabel()
+        self.lab.setAlignment(Qt.AlignCenter)
+        self.lab.setStyleSheet("background:#F1F3F6; border:1px solid #E2E5EA; border-radius:8px; padding:7px;")
+        for b in (self.minus, self.plus):
+            b.setFixedWidth(40)
+        h.addWidget(self.minus)
+        h.addWidget(self.lab, 1)
+        h.addWidget(self.plus)
+        self.minus.clicked.connect(lambda: self._step(-1))
+        self.plus.clicked.connect(lambda: self._step(1))
+        self.set_value(lo)
+
+    def _step(self, d: int) -> None:
+        nv = min(self.hi, max(self.lo, self.v + d))
+        if nv != self.v:
+            self.set_value(nv)
+            self.changed.emit(nv)
+
+    def set_value(self, v: int) -> None:
+        self.v = v
+        self.lab.setText(str(v))
+        self.minus.setEnabled(v > self.lo)
+        self.plus.setEnabled(v < self.hi)
+
+
 # ---------------------------------------------------------------------------------------------
 class NamePage(Page):
     def __init__(self, ctl: ProjectController):
@@ -100,29 +205,31 @@ class NamePage(Page):
                      "Select a key, then add a blank key after it."))
 
         self.section(tr("פריסה", "Layout"))
-        self.style = Segmented([("row", tr("שורה", "Row")), ("column", tr("עמודה", "Column")),
-                                ("grid", tr("רשת", "Grid")), ("wasd", "WASD"),
-                                ("arrows", tr("חצים", "Arrows")), ("custom", tr("חופשי", "Custom"))], per_row=3)
-        self.style.changed.connect(self._set_style)
-        self.add(self.style)
+        names = [("row", tr("שורה", "Row")), ("column", tr("עמודה", "Column")), ("grid", tr("רשת", "Grid")),
+                 ("wasd", "WASD"), ("arrows", tr("חצים", "Arrows")), ("custom", tr("חופשי", "Custom"))]
+        self.layout_cards: dict[str, IconCard] = {}
+        for k, t in names:
+            c = IconCard(k, t, layout_pixmap(k))
+            c.clicked.connect(self._set_style)
+            self.layout_cards[k] = c
+        grid_w = QWidget()
+        gl = QGridLayout(grid_w)
+        gl.setContentsMargins(0, 0, 0, 0)
+        gl.setSpacing(8)
+        for i, c in enumerate(self.layout_cards.values()):
+            gl.addWidget(c, i // 3, i % 3)
+        self.add(grid_w)
         f = self.form()
-        self.rows = QSpinBox()
-        self.rows.setRange(1, 10)
-        self.cols = QSpinBox()
-        self.cols.setRange(1, 10)
-        self.rows.valueChanged.connect(lambda v: self._set_layout("rows", v))
-        self.cols.valueChanged.connect(lambda v: self._set_layout("cols", v))
+        self.rows = Stepper(1, 10)
+        self.cols = Stepper(1, 10)
+        self.rows.changed.connect(lambda v: self._set_layout("rows", v))
+        self.cols.changed.connect(lambda v: self._set_layout("cols", v))
         self.fill = QCheckBox(tr("מלא תאים פנויים במקשים ריקים", "Fill free cells with blank keys"))
         self.fill.toggled.connect(lambda v: self._set_layout("fill_empty_with_blank", v))
-        self.grid_lbl = QLabel(tr("שורות × עמודות", "Rows × columns"))
-        self.grid_w = QWidget()
-        gw = QHBoxLayout(self.grid_w)
-        gw.setContentsMargins(0, 0, 0, 0)
-        gw.addWidget(self.rows)
-        gw.addWidget(QLabel("×"))
-        gw.addWidget(self.cols)
-        gw.addStretch(1)
-        f.addRow(self.grid_lbl, self.grid_w)
+        self.grid_lbl = QLabel(tr("שורות", "Rows"))
+        self.cols_lbl = QLabel(tr("עמודות", "Columns"))
+        f.addRow(self.grid_lbl, self.rows)
+        f.addRow(self.cols_lbl, self.cols)
         f.addRow("", self.fill)
         self.direction = QComboBox()
         for v, t in (("auto", tr("אוטומטי לפי השפה", "Automatic")), ("rtl", tr("מימין לשמאל", "Right to left")),
@@ -194,16 +301,15 @@ class NamePage(Page):
         self.err.setText(" ".join(self.ctl.last_sync.messages) if n > MAX_KEYS else "")
         self.err.setVisible(n > MAX_KEYS)
         self.strip.refresh()
-        self.style.set_value(p.layout.style)
-        for w, v in ((self.rows, p.layout.rows), (self.cols, p.layout.cols)):
-            w.blockSignals(True)
-            w.setValue(v)
-            w.blockSignals(False)
+        for k, c in self.layout_cards.items():
+            c.set_selected(k == p.layout.style)
+        self.rows.set_value(p.layout.rows)
+        self.cols.set_value(p.layout.cols)
         self.fill.blockSignals(True)
         self.fill.setChecked(p.layout.fill_empty_with_blank)
         self.fill.blockSignals(False)
         grid = p.layout.style == "grid"
-        for w in (self.grid_w, self.fill, self.grid_lbl):
+        for w in (self.rows, self.cols, self.fill, self.grid_lbl, self.cols_lbl):
             w.setVisible(grid)
         self.direction.blockSignals(True)
         self.direction.setCurrentIndex(self.direction.findData(p.layout.key_direction))
@@ -380,16 +486,19 @@ class LetteringPage(Page):
         self.weight.changed.connect(self._set_weight)
         self.add(self.weight)
         f = self.form()
-        self.extra = dspin(0, 0.8, 0.05, L.extra_weight)
+        self.extra = dspin(-0.3, 0.8, 0.05, L.extra_weight)
         self.extra.valueChanged.connect(lambda v: self._set("extra_weight", v))
-        f.addRow(tr("עיבוי נוסף", "Extra weight"), self.extra)
+        f.addRow(tr("עובי (Boldness)", "Boldness"), self.extra)
         self.section(tr("גודל ומיקום", "Size & position"))
         f = self.form()
-        self.auto = QCheckBox(tr("הגדול ביותר שנכנס", "Largest that fits"))
+        self.auto = QCheckBox(tr("לפי אחוזים (ללא מ\"מ מדויק)", "Use percentage"))
         self.auto.toggled.connect(self._auto)
         self.size = dspin(3, 25, 0.5, L.size or 11.0)
         self.size.valueChanged.connect(lambda v: self._set("size", v))
-        f.addRow(tr("גודל אות", "Letter size"), self.auto)
+        self.pct = SliderRow(10, 100, 1, 0, " %")
+        self.pct.changed.connect(lambda v: self._set("size_pct", v))
+        f.addRow(tr("גודל אות", "Letter size"), self.pct)
+        f.addRow(tr("גודל מדויק", "Exact size"), self.auto)
         f.addRow("", self.size)
         self.margin = dspin(1.0, 3.5, 0.05, L.margin)
         self.margin.valueChanged.connect(lambda v: self._set("margin", v))
@@ -458,6 +567,8 @@ class LetteringPage(Page):
         self.auto.setChecked(L.size is None)
         self.auto.blockSignals(False)
         self.size.setEnabled(L.size is not None)
+        self.pct.setEnabled(L.size is None)
+        self.pct.set_value(L.size_pct)
         raised = L.mode == "raised"
         self.depth_lbl.setText(tr("גובה בליטה", "Raise height") if raised else tr("עומק", "Depth"))
         self.depth.blockSignals(True)
@@ -472,25 +583,105 @@ class LetteringPage(Page):
 
 
 # ---------------------------------------------------------------------------------------------
+THUMBS = Path(__file__).resolve().parent.parent / "assets" / "thumbs"
+
+
+class ThumbCard(QFrame):
+    """Selectable card with a thumbnail rendered from the real geometry."""
+
+    clicked = Signal(str)
+
+    def __init__(self, key: str, title: str, image: Path, img_h: int = 92):
+        super().__init__()
+        from PySide6.QtGui import QPixmap
+
+        self.key = key
+        self.setObjectName("Card")
+        self.setCursor(Qt.PointingHandCursor)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(8, 8, 8, 8)
+        v.setSpacing(4)
+        pic = QLabel()
+        pic.setAlignment(Qt.AlignCenter)
+        pm = QPixmap(str(image))
+        if not pm.isNull():
+            pic.setPixmap(pm.scaledToHeight(img_h, Qt.SmoothTransformation))
+        v.addWidget(pic)
+        t = QLabel(title)
+        t.setAlignment(Qt.AlignCenter)
+        t.setStyleSheet("font-weight: 600;")
+        v.addWidget(t)
+
+    def set_selected(self, on: bool) -> None:
+        self.setProperty("selected", "true" if on else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def mousePressEvent(self, e):  # noqa: N802
+        self.clicked.emit(self.key)
+
+
+class SliderRow(QWidget):
+    """Label + value box + slider (like a numeric field with a scrubber)."""
+
+    changed = Signal(float)
+
+    def __init__(self, lo: float, hi: float, step: float, decimals: int, suffix: str):
+        super().__init__()
+        self.lo, self.step = lo, step
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.spin = dspin(lo, hi, step, lo, decimals, suffix)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, int(round((hi - lo) / step)))
+        lay.addWidget(self.spin)
+        lay.addWidget(self.slider)
+        self.slider.valueChanged.connect(lambda i: self.spin.setValue(lo + i * step))
+        self.spin.valueChanged.connect(self._spin)
+
+    def _spin(self, v: float) -> None:
+        self.slider.blockSignals(True)
+        self.slider.setValue(int(round((v - self.lo) / self.step)))
+        self.slider.blockSignals(False)
+        self.changed.emit(v)
+
+    def set_value(self, v: float) -> None:
+        for w in (self.spin, self.slider):
+            w.blockSignals(True)
+        self.spin.setValue(v)
+        self.slider.setValue(int(round((v - self.lo) / self.step)))
+        for w in (self.spin, self.slider):
+            w.blockSignals(False)
+
+
+def card_grid(cards: list[QWidget], cols: int = 2) -> QWidget:
+    w = QWidget()
+    g = QGridLayout(w)
+    g.setContentsMargins(0, 0, 0, 0)
+    g.setSpacing(8)
+    for i, c in enumerate(cards):
+        g.addWidget(c, i // cols, i % cols)
+    return w
+
+
 class KeycapPage(Page):
-    NAMES = {"standard": ("Standard", "רגיל"), "low_profile": ("Low Profile", "נמוך"), "thocky": ("Thocky", "עבה")}
+    NAMES = {"standard": ("Standard", "רגיל"), "low_profile": ("Low profile", "נמוך"), "thocky": ("Thocky", "עבה")}
 
     def __init__(self, ctl: ProjectController):
         super().__init__(tr("כובעי מקשים", "Keycaps"))
         self.ctl = ctl
-        self.cards: dict[str, QFrame] = {}
-        for sid, st in KEYCAP_STYLES.items():
-            card = QFrame()
-            card.setObjectName("Card")
-            v = QVBoxLayout(card)
+        self.cards: dict[str, ThumbCard] = {}
+        for sid in KEYCAP_STYLES:
             en, he = self.NAMES[sid]
-            v.addWidget(QLabel(f"<b style='font-size:12pt'>{en}</b>  <span style='color:#6B7280'>{he}</span>"))
-            v.addWidget(QLabel(tr(
-                f"גובה {st.height:.2f} · דופן {st.wall:.1f} · עובי עליון {st.top_thickness:.1f} · שיפוע {st.taper_deg:.2f}°",
-                f"Height {st.height:.2f} · wall {st.wall:.1f} · top {st.top_thickness:.1f} · taper {st.taper_deg:.2f}°")))
-            card.mousePressEvent = lambda e, s=sid: self._pick(s)  # type: ignore[method-assign]
-            self.cards[sid] = card
-            self.add(card)
+            c = ThumbCard(sid, tr(he, en), THUMBS / f"keycap_{sid}.png", 70)
+            c.clicked.connect(self._pick)
+            self.cards[sid] = c
+        self.add(card_grid(list(self.cards.values()), 3))
+        self.section(tr("גובה הכובע", "Keycap height"))
+        self.height = SliderRow(5.0, 12.3, 0.1, 1, " mm")
+        self.height.changed.connect(self._height)
+        self.add(self.height)
+        self.info = self.hint("")
         self.hint(tr("Thocky משנה את המבנה; הצליל בפועל ייקבע רק בבדיקה פיזית.",
                      "Thocky changes the structure; actual sound needs a physical test."))
         self.finish()
@@ -499,47 +690,90 @@ class KeycapPage(Page):
 
     def _pick(self, sid: str) -> None:
         self.ctl.project.keycap_style = sid
+        self.ctl.project.keycap_height = None
+        self.ctl.touch()
+
+    def _height(self, v: float) -> None:
+        st = KEYCAP_STYLES[self.ctl.project.keycap_style]
+        self.ctl.project.keycap_height = None if v >= st.height - 1e-6 else v
         self.ctl.touch()
 
     def refresh(self) -> None:
-        for sid, card in self.cards.items():
-            card.setProperty("selected", "true" if sid == self.ctl.project.keycap_style else "false")
-            card.style().unpolish(card)
-            card.style().polish(card)
+        from ..config.mechanical import min_keycap_height
+
+        p = self.ctl.project
+        st = KEYCAP_STYLES[p.keycap_style]
+        for sid, c in self.cards.items():
+            c.set_selected(sid == p.keycap_style)
+        lo = round(min_keycap_height(st) + 0.05, 1)
+        for w in (self.height.spin, self.height.slider):
+            w.blockSignals(True)
+        self.height.spin.setRange(lo, st.height)
+        for w in (self.height.spin, self.height.slider):
+            w.blockSignals(False)
+        self.height.set_value(p.keycap_height or st.height)
+        self.info.setText(tr(f"טווח מותר: {lo:.1f}–{st.height:.2f} מ\"מ (המתג קובע את המינימום)",
+                             f"Allowed: {lo:.1f}–{st.height:.2f} mm (minimum set by the switch)"))
 
 
 # ---------------------------------------------------------------------------------------------
 class BodyPage(Page):
+    TEX = [("smooth", "חלק", "Smooth"), ("diamond", "יהלומים", "Diamond"), ("ribs", "פסים", "Ribs"),
+           ("fluted", "חריצים", "Fluted"), ("dots", "נקודות", "Dots"), ("chevron", "זיגזג", "Chevron")]
+
     def __init__(self, ctl: ProjectController):
         super().__init__(tr("גוף וטקסטורות", "Body & textures"))
         self.ctl = ctl
+        self.section(tr("טקסטורה חיצונית", "Outside texture"))
+        self.cards: dict[str, ThumbCard] = {}
+        for key, he, en in self.TEX:
+            c = ThumbCard(key, tr(he, en), THUMBS / f"texture_{key}.png", 84)
+            c.clicked.connect(lambda k: self._set("texture", k))
+            self.cards[key] = c
+        self.add(card_grid(list(self.cards.values()), 2))
+        f = self.form()
+        self.tdepth = dspin(0.2, 0.8, 0.05, ctl.project.body.texture_depth)
+        self.tdepth.valueChanged.connect(lambda v: self._set("texture_depth", v))
+        self.tunit = dspin(1.5, 5.0, 0.1, ctl.project.body.texture_unit)
+        self.tunit.valueChanged.connect(lambda v: self._set("texture_unit", v))
+        f.addRow(tr("עומק הטקסטורה", "Texture depth"), self.tdepth)
+        f.addRow(tr("גודל הדוגמה", "Pattern size"), self.tunit)
+        self.section(tr("גובה שפת הגוף", "Body rim height"))
+        self.rim = SliderRow(17.6, 22.0, 0.1, 1, " mm")
+        self.rim.changed.connect(lambda v: self._set("rim_height", None if v <= 17.64 else v))
+        self.add(self.rim)
+        self.hint(tr("שפה גבוהה יותר מסתירה חלק גדול יותר מהכובע. הבדיקות מוודאות שהכובע לא נתקע בלחיצה.",
+                     "A taller rim hides more of the keycap; checks make sure keys never rub when pressed."))
         self.section(tr("חיבור בין המקשים", "Joint between keys"))
         self.joint = Segmented([("grooved", tr("שקע עדין", "Grooved")), ("smooth", tr("חלק", "Smooth"))])
-        self.joint.changed.connect(self._joint)
+        self.joint.changed.connect(lambda v: self._set("joint", v))
         self.add(self.joint)
-        f = self.form()
+        f2 = self.form()
         self.depth = dspin(0.3, 1.2, 0.1, ctl.project.body.groove_depth)
-        self.depth.valueChanged.connect(self._depth)
-        f.addRow(tr("עומק השקע", "Groove depth"), self.depth)
-        self.section(tr("טקסטורה חיצונית", "Outside texture"))
-        self.hint(tr("טקסטורות (יהלומים, פסים, חריצים, נקודות, זיגזג) עדיין לא ממומשות בגיאומטריה ולכן אינן "
-                     "מוצגות כאפשרות פעילה.",
-                     "Textures are not implemented in the geometry yet, so they are not offered."), "Warn")
+        self.depth.valueChanged.connect(lambda v: self._set("groove_depth", v))
+        f2.addRow(tr("עומק השקע", "Groove depth"), self.depth)
         self.finish()
         ctl.changed.connect(self.refresh)
         self.refresh()
 
-    def _joint(self, v: str) -> None:
-        self.ctl.project.body.joint = v  # type: ignore[assignment]
-        self.ctl.touch()
-
-    def _depth(self, v: float) -> None:
-        self.ctl.project.body.groove_depth = v
-        self.ctl.touch()
+    def _set(self, attr: str, v) -> None:
+        if getattr(self.ctl.project.body, attr) != v:
+            setattr(self.ctl.project.body, attr, v)
+            self.ctl.touch()
 
     def refresh(self) -> None:
-        self.joint.set_value(self.ctl.project.body.joint)
-        self.depth.setEnabled(self.ctl.project.body.joint == "grooved")
+        b = self.ctl.project.body
+        for k, c in self.cards.items():
+            c.set_selected(k == b.texture)
+        for w, v in ((self.tdepth, b.texture_depth), (self.tunit, b.texture_unit), (self.depth, b.groove_depth)):
+            w.blockSignals(True)
+            w.setValue(v)
+            w.blockSignals(False)
+        self.tdepth.setEnabled(b.texture != "smooth")
+        self.tunit.setEnabled(b.texture != "smooth")
+        self.rim.set_value(b.rim_height or 17.64)
+        self.joint.set_value(b.joint)
+        self.depth.setEnabled(b.joint == "grooved")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -548,6 +782,9 @@ class ColorsPage(Page):
         super().__init__(tr("צבעים", "Colours"))
         self.ctl = ctl
         c = ctl.project.colors
+        self.blank = QCheckBox(tr("כובעים ריקים (ללא אותיות)", "Blank caps (no letters)"))
+        self.blank.toggled.connect(self._blank)
+        self.add(self.blank)
         self.section(tr("צבעי ברירת מחדל", "Default colours"))
         f = self.form()
         self.body = ColorButton(c.body)
@@ -574,12 +811,18 @@ class ColorsPage(Page):
         f2.addRow(tr("אות", "Letter"), self.kleg)
         f2.addRow("", self.kreset)
         self.count = self.hint("")
+        self.hint(tr("טיפ: לחיצה על גוף, כובע או אות במודל התלת־ממדי בוחרת אותו לצביעה.",
+                     "Tip: click the body, a keycap or a letter in the 3D view to recolour it."))
         self.finish()
         ctl.changed.connect(self.refresh)
         self.refresh()
 
     def _set(self, attr: str, v: str) -> None:
         setattr(self.ctl.project.colors, attr, v)
+        self.ctl.touch()
+
+    def _blank(self, on: bool) -> None:
+        self.ctl.project.blank_legends = on
         self.ctl.touch()
 
     def _key(self, attr: str, v: str) -> None:
@@ -595,6 +838,10 @@ class ColorsPage(Page):
 
     def refresh(self) -> None:
         p = self.ctl.project
+        self.blank.blockSignals(True)
+        self.blank.setChecked(p.blank_legends)
+        self.blank.blockSignals(False)
+        self.legend.setEnabled(not p.blank_legends)
         self.body.set_color(p.colors.body)
         self.cap.set_color(p.colors.cap)
         self.legend.set_color(p.colors.legend)

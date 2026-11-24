@@ -15,10 +15,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.colors import to_rgb  # noqa: E402
 
-from build123d import Pos  # noqa: E402
 
-from ..export.mesh import tessellate  # noqa: E402
-from ..geometry.builder import BuildResult  # noqa: E402
+from ..geometry.builder import BuildResult, part_mesh  # noqa: E402
 
 VIEWS = {
     "iso": (32, -60),
@@ -33,12 +31,11 @@ def _gather(res: BuildResult, exploded: bool, show_switches: bool):
     for p in res.parts:
         if p.role in ("switch", "stem") and not show_switches:
             continue
-        s = p.solid
+        m = part_mesh(p, tol=0.05, ang=0.3)
+        tri = m.triangles
         if exploded:
-            dz = {"cap": 22.0, "legend": 22.0, "switch": 8.0, "stem": 8.0}.get(p.role, 0.0)
-            s = Pos(0, 0, dz) * s
-        m = tessellate(s, tol=0.05, ang=0.3)
-        polys.append(m.triangles)
+            tri = tri + np.array([0, 0, {"cap": 22.0, "legend": 22.0, "switch": 8.0, "stem": 8.0}.get(p.role, 0.0)])
+        polys.append(tri)
         cols.append(np.repeat([to_rgb(p.color)], len(m.faces), axis=0))
     return np.concatenate(polys), np.concatenate(cols)
 

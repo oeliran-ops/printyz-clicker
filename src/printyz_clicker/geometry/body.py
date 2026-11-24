@@ -22,6 +22,8 @@ class BodyResult:
     outline_bbox: tuple[float, float, float, float]   # xmin, ymin, xmax, ymax
     keychain_hole: tuple[float, float] | None = None
     warnings: list[str] = field(default_factory=list)
+    mesh: object = None        # textured mesh (None = use the B-rep)
+    outline: object = None
 
 
 def _rounded_square(w: float, r: float, z: float = 0.0):
@@ -126,7 +128,8 @@ def _keychain(outline, spec: KeychainSpec, mech: MechanicalProfile, warnings: li
     a = math.radians(angle)
     wx, wy = hx * math.cos(a) - hy * math.sin(a), hx * math.sin(a) + hy * math.cos(a)
     hole = Pos(wx, wy, -1) * Cylinder(r_hole, spec.thickness + 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    return tab, hole, (wx, wy)
+    rx, ry = off * math.cos(a) - surface * math.sin(a), off * math.sin(a) + surface * math.cos(a)
+    return tab, hole, (wx, wy), (rx, ry, spec.width / 2 + spec.root_radius + 1.5)
 
 
 def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign,
@@ -149,8 +152,10 @@ def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign
 
     hole_xy = None
     hole_cutter = None
+    exclude = []
     if keychain.enabled:
-        tab, hole_cutter, hole_xy = _keychain(outline, keychain, mech, warnings)
+        tab, hole_cutter, hole_xy, root = _keychain(outline, keychain, mech, warnings)
+        exclude.append(root)
         solid = solid + tab
 
     # cavities per cell
@@ -179,4 +184,15 @@ def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign
     if len(solids) != 1:
         raise ValueError(f"Body produced {len(solids)} separate solids (expected 1)")
     bb = outline.bounding_box()
-    return BodyResult(solids[0], (bb.min.X, bb.min.Y, bb.max.X, bb.max.Y), hole_xy, warnings)
+    res = BodyResult(solids[0], (bb.min.X, bb.min.Y, bb.max.X, bb.max.Y), hole_xy, warnings, outline=outline)
+    if design.texture != "smooth":
+        from .texture import MIN_WALL_LEFT, TextureParams, apply_texture
+
+        depth = min(design.texture_depth, b.outer_wall - MIN_WALL_LEFT)
+        if depth < design.texture_depth:
+            warnings.append(f"עומק הטקסטורה הוגבל ל-{depth:.2f} מ\"מ כדי לשמור על חוזק הדופן. / "
+                            f"texture depth limited to {depth:.2f} mm.")
+        z0, z1 = b.edge_fillet + 0.6, b.height - b.edge_fillet - 0.6
+        res.mesh = apply_texture(res.solid, outline, TextureParams(design.texture, depth, design.texture_unit),
+                                 z0, z1, exclude)
+    return res

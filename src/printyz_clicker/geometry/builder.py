@@ -11,7 +11,9 @@ from typing import Optional
 
 from build123d import Pos, Rot, Solid
 
-from ..config.mechanical import KEYCAP_STYLES, KeycapStyle
+import dataclasses
+
+from ..config.mechanical import KEYCAP_STYLES, KeycapStyle, MechanicalProfile, keycap_with_height
 from ..fonts.registry import FontRegistry, missing_glyphs
 from ..layout.engine import LayoutResult, compute_layout
 from ..model.project import Project
@@ -31,6 +33,16 @@ class Part:
     printable: bool = True
     group: str = ""           # parts of one printed object share a group (e.g. "key03")
     local: object = None      # keycap-local geometry (skirt at z=0) for print layout
+    mesh: object = None       # exact mesh override (textured body); same frame as `solid`
+
+
+def part_mesh(part: "Part", tol: float | None = None, ang: float | None = None):
+    """The mesh every consumer (viewer, preview, STL, 3MF, checks) uses for a part."""
+    from ..export.mesh import ANGULAR_TOLERANCE, TOLERANCE, tessellate
+
+    if part.mesh is not None:
+        return part.mesh
+    return tessellate(part.solid, tol or TOLERANCE, ang or ANGULAR_TOLERANCE)
 
 
 @dataclass
@@ -38,6 +50,7 @@ class BuildResult:
     project: Project
     layout: LayoutResult
     style: KeycapStyle
+    mech: MechanicalProfile = None  # effective profile (project profile + design overrides)
     parts: list[Part] = field(default_factory=list)
     body: Optional[BodyResult] = None
     warnings: list[str] = field(default_factory=list)
@@ -65,6 +78,15 @@ def build_project(project: Project, fonts: FontRegistry | None = None,
     if not res.ok:
         return res
     mech = project.mechanical
+    if project.body.rim_height is not None:
+        mech = dataclasses.replace(mech, body=dataclasses.replace(mech.body, height=project.body.rim_height))
+    res.mech = mech
+    try:
+        style = keycap_with_height(style, project.keycap_height)
+    except ValueError as e:
+        res.errors.append(f"גובה הכובע נמוך מדי. / {e}")
+        return res
+    res.style = style
 
     try:
         font = fonts.resolve(project.lettering.font_id)
@@ -82,7 +104,7 @@ def build_project(project: Project, fonts: FontRegistry | None = None,
     body = build_body(layout, mech, project.body, project.keychain)
     res.body = body
     res.warnings += body.warnings
-    res.parts.append(Part("body", "body", body.solid, project.colors.body, group="body"))
+    res.parts.append(Part("body", "body", body.solid, project.colors.body, group="body", mesh=body.mesh))
 
     rest_z = mech.keycap_rest_z(style)
     blank_cap = keycap_body(style)
@@ -90,7 +112,8 @@ def build_project(project: Project, fonts: FontRegistry | None = None,
     mode = project.lettering.mode
     common_scale = None
     if project.lettering.uniform:
-        boxes = [b for b in (glyph_box(k.value, font.path) for k in project.keys if k.kind == "char" and k.value) if b]
+        boxes = [b for b in (glyph_box(k.value, font.path) for k in project.keys
+                             if k.kind == "char" and k.value and not project.blank_legends) if b]
         common_scale, w = fit_scale(boxes, style.legend_area, project.lettering)
         res.warnings += w
 
@@ -100,7 +123,7 @@ def build_project(project: Project, fonts: FontRegistry | None = None,
         cap_color = project.cap_color(key) if key else project.colors.cap
         legend_color = project.legend_color(key) if key else project.colors.legend
         cap, legend = blank_cap, None
-        if key is not None and key.kind == "char" and key.value:
+        if key is not None and key.kind == "char" and key.value and not project.blank_legends:
             info = build_legend(key.value, font.path, style.legend_area, project.lettering, common_scale)
             res.warnings += [f"[{key.value}] {w}" for w in info.warnings]
             if info.sketch is not None:
@@ -135,7 +158,7 @@ def print_layout(res: BuildResult, gap: float = 6.0) -> list[Part]:
     out: list[Part] = []
     body = next(p for p in res.parts if p.role == "body")
     bx0, by0, bx1, by1 = res.body.outline_bbox
-    out.append(Part("body", "body", body.solid, body.color, group="body"))
+    out.append(Part("body", "body", body.solid, body.color, group="body", mesh=body.mesh))
     face_down = print_orientation(res)["cap"] == "face_down"
     h = res.style.height
     pitch = res.style.bottom_width + gap

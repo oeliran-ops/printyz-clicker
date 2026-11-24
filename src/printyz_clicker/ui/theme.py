@@ -48,5 +48,27 @@ QSlider::groove:horizontal {{ height: 4px; background: {BORDER}; border-radius: 
 QSlider::handle:horizontal {{ background: {ACCENT}; width: 16px; margin: -6px 0; border-radius: 8px; }}
 QScrollArea {{ border: none; background: transparent; }}
 QStatusBar {{ background: {PANEL}; border-top: 1px solid {BORDER}; }}
+QComboBox QAbstractItemView {{ background: {PANEL}; color: {TEXT}; border: 1px solid {BORDER};
+  selection-background-color: #E3ECFD; selection-color: {ACCENT_DARK}; outline: 0; padding: 4px; }}
+QCheckBox::indicator {{ width: 16px; height: 16px; border: 1px solid #B8BEC7; border-radius: 4px; background: {PANEL}; }}
+QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
 QToolTip {{ background: {TEXT}; color: white; border: none; padding: 6px; }}
 """
+
+
+def light_palette():
+    """Explicit light palette so Windows dark mode never produces dark popups / unreadable text."""
+    from PySide6.QtGui import QColor, QPalette
+
+    pal = QPalette()
+    roles = {
+        QPalette.Window: BG, QPalette.WindowText: TEXT, QPalette.Base: PANEL, QPalette.AlternateBase: "#F7F8FA",
+        QPalette.ToolTipBase: TEXT, QPalette.ToolTipText: "#FFFFFF", QPalette.Text: TEXT, QPalette.Button: PANEL,
+        QPalette.ButtonText: TEXT, QPalette.BrightText: "#FFFFFF", QPalette.Highlight: ACCENT,
+        QPalette.HighlightedText: "#FFFFFF", QPalette.PlaceholderText: "#9AA0A8", QPalette.Link: ACCENT,
+    }
+    for role, col in roles.items():
+        pal.setColor(QPalette.All, role, QColor(col))
+    for role in (QPalette.Text, QPalette.WindowText, QPalette.ButtonText):
+        pal.setColor(QPalette.Disabled, role, QColor("#A9AEB6"))
+    return pal

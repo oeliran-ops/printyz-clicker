@@ -8,9 +8,9 @@ from pathlib import Path
 
 from build123d import Color, Compound, export_step
 
-from ..geometry.builder import BuildResult, print_layout, print_orientation
+from ..geometry.builder import BuildResult, part_mesh, print_layout, print_orientation
 from ..validation.checks import ValidationReport
-from .mesh import tessellate, write_stl
+from .mesh import write_stl
 from .threemf import Object3MF, Volume, write_3mf
 
 
@@ -42,7 +42,7 @@ def export_all(res: BuildResult, report: ValidationReport, root: Path,
 
     plate = print_layout(res)
     fmap = filament_map(res)
-    meshes = {p.name: tessellate(p.solid) for p in plate}
+    meshes = {p.name: part_mesh(p) for p in plate}
 
     if "stl" in formats:
         stl_dir = exp / "STL"
@@ -75,6 +75,8 @@ def export_all(res: BuildResult, report: ValidationReport, root: Path,
         "legend_mode": proj.lettering.mode,
         "print_orientation": print_orientation(res),
         "filaments": [{"slot": i, "color": c} for c, i in fmap.items()],
+        "texture": proj.body.texture,
+        "step_note": "STEP holds the untextured B-rep body; textures are in STL/3MF" if proj.body.texture != "smooth" else "",
         "validation_passed": report.passed,
     }
     (exp / "export_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), "utf-8")

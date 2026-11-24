@@ -108,3 +108,55 @@ def test_uniform_letter_scale_across_keys():
     p.lettering.uniform = False          # old behaviour: each key stretched on its own
     indep = [h for _, h in build_project(p, include_switches=False).legend_boxes.values()]
     assert max(indep) - min(indep) > 1.0
+
+
+def test_keycap_height_slider_changes_geometry():
+    p = make("A")
+    p.keycap_height = 9.5
+    res = build_project(p, include_switches=False)
+    cap = next(x for x in res.parts if x.role == "cap")
+    assert abs(cap.solid.bounding_box().size.Z - 9.5) < 1e-3
+    assert validate(res, mesh_checks=False).passed
+    p.keycap_height = 3.0
+    assert not build_project(p, include_switches=False).ok
+
+
+def test_rim_height_raises_body():
+    p = make("ab", body__rim_height=19.5)
+    res = build_project(p, include_switches=False)
+    assert abs(res.body.solid.bounding_box().max.Z - 19.5) < 1e-3
+    assert validate(res, mesh_checks=False).passed
+
+
+def test_letter_size_percent_and_blank():
+    full = build_project(make("A"), include_switches=False).legend_boxes["key01"][1]
+    half = build_project(make("A", lettering__size_pct=50.0), include_switches=False).legend_boxes["key01"][1]
+    assert abs(half - full / 2) < 0.05
+    blank = build_project(make("AB", blank_legends=True), include_switches=False)
+    assert not [x for x in blank.parts if x.role == "legend"]
+
+
+def test_negative_boldness_thins_letters():
+    reg = build_project(make("H"), include_switches=False)
+    thin = build_project(make("H", lettering__extra_weight=-0.2), include_switches=False)
+    v = lambda r: next(x for x in r.parts if x.role == "legend").solid.volume  # noqa: E731
+    assert v(thin) < v(reg) * 0.95
+
+
+@pytest.mark.parametrize("tex", ["diamond", "ribs", "fluted", "dots", "chevron"])
+def test_textures_cut_outside_only(tex):
+    from printyz_clicker.export.mesh import mesh_health, tessellate
+
+    p = make("ab", body__texture=tex)
+    p.keychain.enabled = True
+    res = build_project(p, include_switches=False)
+    m = res.body.mesh
+    h = mesh_health(m)
+    smooth_vol = mesh_health(tessellate(res.body.solid))["volume"]
+    assert h["watertight"] and h["bodies"] == 1
+    assert 0 < smooth_vol - h["volume"] < 0.1 * smooth_vol      # material removed, but only a skin
+    # pockets untouched: inside the outline shrunk by the outer wall there is no change
+    import numpy as np
+    inner = np.abs(m.vertices[:, :2]).max(axis=1) < 20.75 / 2 + 0.01
+    assert validate(res, mesh_checks=True).passed
+    assert inner.any()

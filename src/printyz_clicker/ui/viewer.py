@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import pyvista as pv
-from build123d import Pos
 from pyvistaqt import QtInteractor
 from PySide6.QtWidgets import QWidget
 
-from ..export.mesh import tessellate
-from ..geometry.builder import BuildResult
+from ..geometry.builder import BuildResult, part_mesh
 
 EXPLODE_DZ = {"cap": 24.0, "legend": 24.0, "switch": 9.0, "stem": 9.0}
 
@@ -20,8 +18,10 @@ def to_polydata(mesh) -> pv.PolyData:
 
 
 class Viewer3D(QtInteractor):
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, on_pick=None):
         super().__init__(parent)
+        self.on_pick = on_pick
+        self._parts: dict[str, tuple[str, str | None]] = {}   # name -> (role, key_id)
         self.set_background("#FBFBFC", top="#E9EDF3")
         self.enable_anti_aliasing("ssaa")
         self.enable_lightkit()
@@ -37,9 +37,24 @@ class Viewer3D(QtInteractor):
     # ---- data ---------------------------------------------------------------
     def show_result(self, res: BuildResult) -> None:
         self._meshes = {
-            p.name: (to_polydata(tessellate(p.solid, tol=0.03, ang=0.25)), p.color, p.role) for p in res.parts
+            p.name: (to_polydata(part_mesh(p, tol=0.03, ang=0.25)), p.color, p.role) for p in res.parts
         }
+        self._parts = {p.name: (p.role, p.key_id) for p in res.parts}
         self.redraw()
+        if self.on_pick and not getattr(self, "_picking", False):
+            try:
+                self.enable_mesh_picking(self._picked, use_actor=True, show=False, show_message=False,
+                                         left_clicking=True)
+                self._picking = True
+            except Exception:  # noqa: BLE001 - picking is a convenience; the colour page still works
+                self._picking = False
+
+    def _picked(self, actor) -> None:
+        for name, a in self.actors.items():
+            if a is actor and name in self._parts:
+                role, key_id = self._parts[name]
+                self.on_pick(role, key_id)
+                return
 
     def clear_model(self) -> None:
         self._meshes = {}

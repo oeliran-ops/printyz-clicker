@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from .i18n import set_language
 from .main_window import MainWindow
-from .theme import STYLESHEET
+from .theme import STYLESHEET, light_palette
 
 
 def _switch_language(lang: str, old: MainWindow) -> None:
@@ -25,6 +25,7 @@ def main() -> int:
     app.setApplicationName("PRINTYZ Clicker Studio")
     app.setOrganizationName("PRINTYZ")
     app.setStyle("Fusion")
+    app.setPalette(light_palette())
     app.setStyleSheet(STYLESHEET)
     set_language("he")
     win = MainWindow(on_language=_switch_language)

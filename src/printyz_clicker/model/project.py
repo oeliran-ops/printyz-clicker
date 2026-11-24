@@ -52,9 +52,10 @@ class LayoutSpec:
 class LetteringSpec:
     mode: LegendMode = "flush"
     font_id: str = "default-bold"
-    extra_weight: float = 0.0       # mm of real outline growth
+    extra_weight: float = 0.0       # mm of real outline growth (negative = thinner, min -0.3)
     size: Optional[float] = None    # requested height (mm) of the tallest glyph; None = largest that fits
     uniform: bool = True            # one scale for all keys (consistent letter size)
+    size_pct: float = 100.0         # % of the largest size that fits (used when size is None)
     margin: float = 1.25            # mm from flat top-face edge (allowed 1.0 - 3.5)
     offset_x: float = 0.0
     offset_y: float = 0.0
@@ -66,7 +67,10 @@ class LetteringSpec:
 class BodyDesign:
     joint: JointStyle = "grooved"
     groove_depth: float = 0.80
-    texture: str = "smooth"
+    texture: str = "smooth"              # smooth | diamond | ribs | fluted | dots | chevron
+    texture_depth: float = 0.5
+    texture_unit: float = 2.4            # pattern size (mm)
+    rim_height: Optional[float] = None   # body height override (None = calibrated 17.64)
 
 
 @dataclass
@@ -99,6 +103,8 @@ class Project:
     layout: LayoutSpec = field(default_factory=LayoutSpec)
     lettering: LetteringSpec = field(default_factory=LetteringSpec)
     keycap_style: str = "standard"
+    keycap_height: Optional[float] = None   # None = style default
+    blank_legends: bool = False             # "Blank": caps without letters
     body: BodyDesign = field(default_factory=BodyDesign)
     keychain: KeychainSpec = field(default_factory=KeychainSpec)
     colors: ColorSpec = field(default_factory=ColorSpec)
@@ -139,6 +145,8 @@ class Project:
             layout=build(LayoutSpec, d.get("layout")),
             lettering=build(LetteringSpec, d.get("lettering")),
             keycap_style=d.get("keycap_style", "standard"),
+            keycap_height=d.get("keycap_height"),
+            blank_legends=d.get("blank_legends", False),
             body=build(BodyDesign, d.get("body")),
             keychain=build(KeychainSpec, d.get("keychain")),
             colors=build(ColorSpec, d.get("colors")),

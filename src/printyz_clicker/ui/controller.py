@@ -37,6 +37,7 @@ class _BuildJob(QRunnable):
 
 class ProjectController(QObject):
     changed = Signal()                     # project data changed (UI refresh)
+    history_changed = Signal(bool, bool)   # can_undo, can_redo
     building = Signal()
     built = Signal(object, object)         # BuildResult, ValidationReport
     build_failed = Signal(str)
@@ -58,19 +59,61 @@ class ProjectController(QObject):
         self._timer.setSingleShot(True)
         self._timer.setInterval(350)
         self._timer.timeout.connect(self._start_build)
+        # undo history: a snapshot is committed once edits pause (a slider drag = one step)
+        self._undo: list[Project] = []
+        self._redo: list[Project] = []
+        self._stable = copy.deepcopy(self.project)
+        self._hist_timer = QTimer(self)
+        self._hist_timer.setSingleShot(True)
+        self._hist_timer.setInterval(600)
+        self._hist_timer.timeout.connect(self._commit_history)
 
     # ---- edits ---------------------------------------------------------------
     def set_text(self, text: str) -> None:
         self.last_sync = sync_keys_from_text(self.project, text)
         self.touch()
 
-    def touch(self) -> None:
+    def touch(self, record: bool = True) -> None:
         """Call after any change to self.project."""
         self.changed.emit()
         self._dirty = True
         self._timer.start()
+        if record:
+            self._hist_timer.start()
+
+    # ---- undo / redo -----------------------------------------------------------
+    def _commit_history(self) -> None:
+        if self._stable.to_dict() == self.project.to_dict():
+            return
+        self._undo.append(self._stable)
+        del self._undo[:-100]
+        self._redo.clear()
+        self._stable = copy.deepcopy(self.project)
+        self.history_changed.emit(True, False)
+
+    def _restore(self, snap: Project) -> None:
+        self.project = copy.deepcopy(snap)
+        self._stable = copy.deepcopy(snap)
+        self.last_sync = SyncResult(total_keys=len(self.project.keys))
+        self.touch(record=False)
+        self.history_changed.emit(bool(self._undo), bool(self._redo))
+
+    def undo(self) -> None:
+        self._commit_history()          # an edit still pending becomes undoable first
+        if self._undo:
+            self._redo.append(copy.deepcopy(self.project))
+            self._restore(self._undo.pop())
+
+    def redo(self) -> None:
+        if self._redo:
+            self._undo.append(copy.deepcopy(self.project))
+            self._restore(self._redo.pop())
 
     def replace_project(self, project: Project) -> None:
+        self._undo.clear()
+        self._redo.clear()
+        self._stable = copy.deepcopy(project)
+        self.history_changed.emit(False, False)
         self.project = project
         self.last_sync = sync_keys_from_text(project, project.text) if not project.keys else SyncResult(
             total_keys=len(project.keys))
