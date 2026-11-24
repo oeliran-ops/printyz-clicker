@@ -3,7 +3,8 @@
 - Answer the user in **Hebrew**. Code, identifiers and commit messages in English.
 - Spec: `docs/SPEC.md` (the user's full requirements, Hebrew; section numbers 1–55 are referenced in code/docs).
   Architecture + status per spec section: `docs/ARCHITECTURE.md`.
-- Run tests: `.venv/bin/python -m pytest -q` (Windows: `.venv\Scripts\python -m pytest -q`).
+- Run tests: `.venv/bin/python -m pytest -q`. On the user's Windows machine the venv lives outside OneDrive:
+  `$env:LOCALAPPDATA\PRINTYZ\ClickerV2\.venv` (Python 3.13; 3.14 unsupported by OCP).
 - Build a sample: `python -m printyz_clicker build --text "שלום" --out out`.
 
 ## Non-negotiable rules

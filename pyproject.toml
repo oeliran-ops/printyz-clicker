@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "printyz-clicker"
 version = "0.1.0"
 description = "PRINTYZ Clicker Studio - parametric MX clicker generator"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"  # build123d/OCP wheels: 3.14 not supported yet
 dependencies = [
     "build123d>=0.9",
     "fonttools>=4.40",
