@@ -5,8 +5,8 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QFont, QFontDatabase, QIcon
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget,
@@ -15,9 +15,9 @@ from PySide6.QtWidgets import (
 from .. import MAX_KEYS
 from ..config.mechanical import KEYCAP_STYLES
 from ..fonts.registry import FontEntry
-from ..text.engine import insert_extra_key, keys_visual, remove_key
+from ..text.engine import insert_blank_visual, keys_visual, remove_key
 from .controller import ProjectController
-from .i18n import tr
+from .i18n import is_rtl, tr
 from .widgets import ColorButton, Page, Segmented, dspin
 
 
@@ -26,7 +26,11 @@ def _key_label(k) -> str:
         return k.value
     if k.kind == "blank":
         return "□"
-    return "★"
+    if k.kind == "svg":
+        return "SVG"
+    from ..geometry.symbols import SYMBOLS
+
+    return SYMBOLS.get(k.value, (k.value, k.value))[0 if is_rtl() else 1]
 
 
 class KeyStrip(QWidget):
@@ -47,6 +51,7 @@ class KeyStrip(QWidget):
         while self.lay.count():
             w = self.lay.takeAt(0).widget()
             if w:
+                w.setParent(None)
                 w.deleteLater()
         keys = keys_visual(self.ctl.project)
         ids = {k.id for k in keys}
@@ -193,16 +198,19 @@ class NamePage(Page):
         self.strip = KeyStrip(ctl)
         self.add(self.strip)
         row = QHBoxLayout()
-        self.add_blank = QPushButton(tr("+ מקש ריק", "+ Blank key"))
-        self.add_blank.clicked.connect(self._add_blank)
-        self.remove = QPushButton(tr("הסר מקש נוסף", "Remove extra key"))
+        self.add_left = QPushButton(tr("+ ריק משמאל", "+ Blank left"))
+        self.add_right = QPushButton(tr("+ ריק מימין", "+ Blank right"))
+        self.add_left.clicked.connect(lambda: self._add_blank("left"))
+        self.add_right.clicked.connect(lambda: self._add_blank("right"))
+        self.remove = QPushButton(tr("הסר מקש", "Remove key"))
         self.remove.clicked.connect(self._remove)
-        row.addWidget(self.add_blank)
+        row.addWidget(self.add_right)
+        row.addWidget(self.add_left)
         row.addWidget(self.remove)
         row.addStretch(1)
         self.lay.addLayout(row)
-        self.hint(tr("בחר מקש ולחץ \"+ מקש ריק\" כדי להוסיף מקש ריק אחריו.",
-                     "Select a key, then add a blank key after it."))
+        self.hint(tr("מקש ריק נוסף ליד המקש שנבחר, או בקצה אם לא נבחר מקש. \"הסר\" מוחק מקש ריק או סמל שהוספת.",
+                     "Blank keys go next to the selected key, or at the end. Remove deletes an added key."))
 
         self.section(tr("פריסה", "Layout"))
         names = [("row", tr("שורה", "Row")), ("column", tr("עמודה", "Column")), ("grid", tr("רשת", "Grid")),
@@ -261,12 +269,10 @@ class NamePage(Page):
             setattr(self.ctl.project.layout, attr, v)
             self.ctl.touch()
 
-    def _add_blank(self) -> None:
+    def _add_blank(self, side: str) -> None:
         p = self.ctl.project
-        idx = len(p.keys)
-        if self.strip.current:
-            idx = next(i for i, k in enumerate(p.keys) if k.id == self.strip.current) + 1
-        insert_extra_key(p, idx)
+        k = insert_blank_visual(p, side, self.strip.current)
+        self.strip.current = k.id
         self.ctl.last_sync.total_keys = len(p.keys)
         self.ctl.touch()
 
@@ -322,6 +328,7 @@ class NamePage(Page):
         while self.cgrid.count():
             w = self.cgrid.takeAt(0).widget()
             if w:
+                w.setParent(None)
                 w.deleteLater()
         p = self.ctl.project
         res = self.ctl.result
@@ -345,37 +352,52 @@ class NamePage(Page):
 
 
 # ---------------------------------------------------------------------------------------------
+_QT_FONTS: dict[str, list[str]] = {}
+
+
+def _qt_families(path: str) -> list[str]:
+    if path not in _QT_FONTS:
+        fid = QFontDatabase.addApplicationFont(path)
+        _QT_FONTS[path] = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
+    return _QT_FONTS[path]
+
+
 class FontCard(QFrame):
+    """Compact card: the user's text in the font (large) + family name (small)."""
+
     clicked = Signal(str)
 
     def __init__(self, entry: FontEntry, sample: str, selected: bool, dev: bool, on_approve):
+        from PySide6.QtWidgets import QSizePolicy
+
         super().__init__()
         self.setObjectName("Card")
         self.setProperty("selected", "true" if selected else "false")
+        self.setCursor(Qt.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.setFixedHeight(92 if dev else 78)
         self.entry = entry
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(12, 8, 12, 8)
-        top = QHBoxLayout()
-        name = QLabel(f"<b>{entry.family}</b>  <span style='color:#6B7280'>{entry.weight}</span>")
-        top.addWidget(name)
-        top.addStretch(1)
-        langs = "עב" if entry.supports_hebrew else ""
-        langs += " · EN" if entry.supports_latin else ""
-        top.addWidget(QLabel(f"<span style='color:#6B7280'>{langs}</span>"))
+        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setSpacing(0)
+        fams = _qt_families(entry.path)
+        prev = QLabel(sample)
+        prev.setTextFormat(Qt.PlainText)
+        prev.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        fam = (fams[0] if fams else entry.family).replace("'", "")
+        # the app stylesheet sets font-family on every QWidget, so the sample font must be a stylesheet too
+        prev.setStyleSheet(f"font-family: '{fam}'; font-size: 28px; font-weight: {min(900, max(100, entry.weight))};")
+        lay.addWidget(prev)
+        name = QLabel(entry.family)
+        name.setStyleSheet("color:#6B7280; font-size:9pt;")
+        name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        lay.addWidget(name)
         if dev:
-            ap = QCheckBox(tr("מאושר ללקוח", "Approved"))
+            ap = QCheckBox(tr("ללקוח", "Customer"))
+            ap.setStyleSheet("font-size:8.5pt;")
             ap.setChecked(entry.approved)
             ap.toggled.connect(lambda v: on_approve(entry, v))
-            top.addWidget(ap)
-        lay.addLayout(top)
-        fid = QFontDatabase.addApplicationFont(entry.path)
-        fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
-        prev = QLabel(sample)
-        f = QFont(fams[0] if fams else entry.family)
-        f.setPointSize(22)
-        f.setWeight(QFont.Weight(min(900, max(100, entry.weight))))
-        prev.setFont(f)
-        lay.addWidget(prev)
+            lay.addWidget(ap)
 
     def mousePressEvent(self, e):  # noqa: N802 - Qt API
         self.clicked.emit(self.entry.id)
@@ -410,6 +432,7 @@ class FontPage(Page):
         self.dev_widget = QWidget()
         self.dev_widget.setLayout(self.dev_row)
         self.add(self.dev_widget)
+        self.count_lbl = self.hint("")
         self.list_box = QVBoxLayout()
         self.list_box.setSpacing(8)
         self.lay.addLayout(self.list_box)
@@ -446,6 +469,7 @@ class FontPage(Page):
         while self.list_box.count():
             w = self.list_box.takeAt(0).widget()
             if w:
+                w.setParent(None)
                 w.deleteLater()
         dev = self.ctl.developer_mode
         self.dev_widget.setVisible(dev)
@@ -453,20 +477,41 @@ class FontPage(Page):
         self._last_text = self.ctl.project.text
         q = self.search.text().strip().lower()
         lang = self.lang.currentData()
-        fonts = self.ctl.fonts.fonts.values() if dev else self.ctl.fonts.customer_fonts()
-        shown = 0
-        for e in sorted(fonts, key=lambda f: (not f.approved, f.family.lower(), f.weight)):
+        cur = self.ctl.project.lettering.font_id
+        fonts = list(self.ctl.fonts.fonts.values()) if dev else self.ctl.fonts.customer_fonts()
+        # one card per family: the selected variant, else the boldest approved one
+        fam: dict[str, FontEntry] = {}
+        for e in fonts:
+            best = fam.get(e.family)
+            if best is None or e.id == cur or (best.id != cur and (e.approved, e.weight) > (best.approved, best.weight)):
+                fam[e.family] = e
+        heb_text = any("\u0590" <= ch <= "\u05ff" for ch in text)
+        cards = []
+        for e in sorted(fam.values(), key=lambda f: (not f.approved, not f.supports_hebrew, f.family.lower())):
             if q and q not in e.family.lower():
                 continue
             if lang == "he" and not e.supports_hebrew or lang == "en" and not e.supports_latin:
                 continue
-            sample = text or ("שלום Abc" if e.supports_hebrew else "Hello Abc")
-            card = FontCard(e, sample, e.id == self.ctl.project.lettering.font_id, dev, self._approve)
+            if heb_text and not e.supports_hebrew and not dev:
+                continue                         # never offer a font that cannot write the name
+            sample = (text[:7] if text else ("שלום" if e.supports_hebrew else "Name"))
+            card = FontCard(e, sample, e.family == self._family_of(cur), dev, self._approve)
             card.clicked.connect(self._choose)
-            self.list_box.addWidget(card)
-            shown += 1
-            if shown >= 60:
-                break
+            cards.append(card)
+        grid = QWidget()
+        g = QGridLayout(grid)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(8)
+        for i, c in enumerate(cards):
+            g.addWidget(c, i // 2, i % 2)
+        self.list_box.addWidget(grid)
+        self.count_lbl.setText(tr(f"{len(cards)} גופנים", f"{len(cards)} fonts"))
+
+    def _family_of(self, fid: str) -> str:
+        try:
+            return self.ctl.fonts.resolve(fid).family
+        except KeyError:
+            return ""
 
 
 # ---------------------------------------------------------------------------------------------
@@ -575,11 +620,25 @@ class LetteringPage(Page):
         self.depth.setValue(L.raise_height if raised else L.depth)
         self.depth.blockSignals(False)
         res = self.ctl.result
-        if res and res.legend_boxes:
-            hmax = max(h for _, h in res.legend_boxes.values())
+        dev = self.ctl.developer_mode
+        for w in (self.auto, self.size):
+            w.setVisible(dev)                  # exact mm only for the developer; customers use %
+        if res and res.ok:
+            lo, hi = res.boldness_range
+            self.extra.blockSignals(True)
+            self.extra.setRange(lo, hi)        # never offer a weight that would break the letters
+            self.extra.setValue(min(max(L.extra_weight, lo), hi))
+            self.extra.blockSignals(False)
+            self.extra.setToolTip(tr(f"טווח בטוח לגופן ולגודל הנוכחיים: {lo:+.2f} עד {hi:+.2f} מ\"מ",
+                                     f"Safe range for this font and size: {lo:+.2f} to {hi:+.2f} mm"))
             area = res.style.legend_area - 2 * L.margin
-            self.size_info.setText(tr(f"גובה אות בפועל: {hmax:.1f} מ\"מ · שטח מותר: {area:.1f} מ\"מ",
-                                      f"Actual letter height: {hmax:.1f} mm · allowed: {area:.1f} mm"))
+            if res.letter_height:
+                self.size.blockSignals(True)
+                self.size.setMaximum(round(area, 1))
+                self.size.blockSignals(False)
+            self.size_info.setText(tr(
+                f"גובה האות בפועל: {res.letter_height:.1f} מ\"מ · מקסימום לשטח: {area:.1f} מ\"מ · עובי מותר {lo:+.2f}..{hi:+.2f}",
+                f"Letter height: {res.letter_height:.1f} mm · max for area: {area:.1f} mm · weight {lo:+.2f}..{hi:+.2f}"))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -998,3 +1057,138 @@ class ExportPage(Page):
         d = QFileDialog.getExistingDirectory(self, tr("בחר תיקייה", "Choose folder"), self.folder.text())
         if d:
             self.folder.setText(d)
+
+
+# ---------------------------------------------------------------------------------------------
+def svg_pixmap(svg: str, size: int = 44):
+    from PySide6.QtCore import QByteArray
+    from PySide6.QtGui import QPainter, QPixmap
+    from PySide6.QtSvg import QSvgRenderer
+
+    r = QSvgRenderer(QByteArray(svg.encode()))
+    pm = QPixmap(size * 2, size * 2)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    r.render(p)
+    p.end()
+    return pm
+
+
+class SymbolsPage(Page):
+    """Built-in symbol library + SVG import (spec 19-21). Symbols use the same modes and colours as letters."""
+
+    def __init__(self, ctl: ProjectController):
+        super().__init__(tr("סמלים ו־SVG", "Symbols & SVG"))
+        from ..geometry.symbols import SYMBOLS
+
+        self.ctl = ctl
+        self.picked: tuple[str, str] | None = None      # (kind, value)
+        self.hint(tr("1. בחר סמל  2. בחר מקש למטה (או בלי מקש)  3. לחץ על פעולה.",
+                     "1. Pick a symbol  2. pick a key below (optional)  3. choose an action."))
+        self.grid = QGridLayout()
+        self.grid.setSpacing(6)
+        self.buttons: dict[str, QPushButton] = {}
+        self._icons_built = False
+        self._symbols = SYMBOLS
+        self.lay.addLayout(self.grid)
+        imp = QPushButton(tr("ייבוא קובץ SVG…", "Import SVG file…"))
+        imp.clicked.connect(self._import_svg)
+        self.add(imp)
+        self.svg_info = self.hint("")
+        self.section(tr("מקשים (לפי סדר המוצר)", "Keys (product order)"))
+        self.strip = KeyStrip(ctl)
+        self.add(self.strip)
+        row = QHBoxLayout()
+        self.apply_btn = QPushButton(tr("החל על המקש שנבחר", "Apply to selected key"))
+        self.apply_btn.setObjectName("Primary")
+        self.apply_btn.clicked.connect(self._apply)
+        self.left_btn = QPushButton(tr("+ מקש חדש משמאל", "+ New key left"))
+        self.right_btn = QPushButton(tr("+ מקש חדש מימין", "+ New key right"))
+        self.left_btn.clicked.connect(lambda: self._new("left"))
+        self.right_btn.clicked.connect(lambda: self._new("right"))
+        row.addWidget(self.apply_btn)
+        self.lay.addLayout(row)
+        row2 = QHBoxLayout()
+        row2.addWidget(self.right_btn)
+        row2.addWidget(self.left_btn)
+        self.lay.addLayout(row2)
+        self.clear_btn = QPushButton(tr("הסר סמל מהמקש (מקש ריק)", "Clear symbol (blank key)"))
+        self.clear_btn.clicked.connect(self._clear)
+        self.add(self.clear_btn)
+        self.status = self.hint("")
+        self.finish()
+        ctl.changed.connect(self.refresh)
+        self.refresh()
+
+    def showEvent(self, e):  # noqa: N802 - build the icon grid lazily (first time the page is opened)
+        if not self._icons_built:
+            from ..geometry.symbols import sketch_to_svg, symbol_sketch
+
+            for i, (sid, (he, en, _)) in enumerate(self._symbols.items()):
+                b = QPushButton()
+                b.setCheckable(True)
+                b.setFixedSize(58, 58)
+                b.setIconSize(QSize(40, 40))
+                b.setIcon(QIcon(svg_pixmap(sketch_to_svg(symbol_sketch(sid)))))
+                b.setToolTip(tr(he, en))
+                b.clicked.connect(lambda _=False, s=sid: self._pick(("symbol", s)))
+                self.grid.addWidget(b, i // 5, i % 5)
+                self.buttons[sid] = b
+            self._icons_built = True
+        super().showEvent(e)
+
+    def _pick(self, what: tuple[str, str]) -> None:
+        self.picked = what
+        for sid, b in self.buttons.items():
+            b.setChecked(what == ("symbol", sid))
+        self.refresh()
+
+    def _import_svg(self) -> None:
+        from ..geometry.symbols import SvgImportError, svg_sketch
+
+        path, _ = QFileDialog.getOpenFileName(self, tr("בחר קובץ SVG", "Choose SVG"), "", "SVG (*.svg)")
+        if not path:
+            return
+        try:
+            _, warns = svg_sketch(path)
+        except SvgImportError as e:
+            self.svg_info.setObjectName("Error")
+            self.svg_info.setText(str(e))
+            self.svg_info.style().polish(self.svg_info)
+            return
+        self.svg_info.setObjectName("Warn" if warns else "Ok")
+        self.svg_info.setText(f"{Path(path).name}: " + (" · ".join(w.split(' / ')[0] for w in warns) or tr("תקין ✓", "OK ✓")))
+        self.svg_info.style().polish(self.svg_info)
+        self._pick(("svg", path))
+
+    def _apply(self) -> None:
+        from ..text.engine import set_key_content
+
+        if self.picked and self.strip.current:
+            set_key_content(self.ctl.project, self.strip.current, *self.picked)
+            self.ctl.touch()
+
+    def _new(self, side: str) -> None:
+        from ..text.engine import insert_key_visual
+
+        if self.picked:
+            k = insert_key_visual(self.ctl.project, side, self.strip.current, *self.picked)
+            self.strip.current = k.id
+            self.ctl.touch()
+
+    def _clear(self) -> None:
+        from ..text.engine import set_key_content
+
+        if self.strip.current:
+            set_key_content(self.ctl.project, self.strip.current, "blank", "")
+            self.ctl.touch()
+
+    def refresh(self) -> None:
+        self.strip.refresh()
+        has_key = self.strip.current is not None
+        self.apply_btn.setEnabled(bool(self.picked) and has_key)
+        self.left_btn.setEnabled(bool(self.picked))
+        self.right_btn.setEnabled(bool(self.picked))
+        self.clear_btn.setEnabled(has_key)
+        n = len(self.ctl.project.keys)
+        self.status.setText(tr(f"{n} מקשים מתוך 10", f"{n} of 10 keys"))

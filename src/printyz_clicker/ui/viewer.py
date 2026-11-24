@@ -36,9 +36,16 @@ class Viewer3D(QtInteractor):
 
     # ---- data ---------------------------------------------------------------
     def show_result(self, res: BuildResult) -> None:
-        self._meshes = {
-            p.name: (to_polydata(part_mesh(p, tol=0.03, ang=0.25)), p.color, p.role) for p in res.parts
-        }
+        cache = getattr(self, "_poly_cache", {})
+        new_cache, meshes = {}, {}
+        for p in res.parts:
+            src = p.mesh if p.mesh is not None else p.solid
+            hit = cache.get(id(src))
+            poly = hit[1] if hit is not None and hit[0] is src else to_polydata(part_mesh(p, tol=0.03, ang=0.25))
+            new_cache[id(src)] = (src, poly)
+            meshes[p.name] = (poly, p.color, p.role)
+        self._poly_cache = new_cache
+        self._meshes = meshes
         self._parts = {p.name: (p.role, p.key_id) for p in res.parts}
         self.redraw()
         if self.on_pick and not getattr(self, "_picking", False):

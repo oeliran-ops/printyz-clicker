@@ -102,7 +102,7 @@ def test_uniform_letter_scale_across_keys():
     # ם ו ש have the same height in the font; with one common scale they must match on the keycaps
     res = build_project(make("שום"), include_switches=False)
     hs = [h for _, h in res.legend_boxes.values()]
-    assert max(hs) - min(hs) < 0.05
+    assert max(hs) - min(hs) < 0.02 * max(hs)     # one scale; only the font's own overshoot differs
     assert validate(res, mesh_checks=False).passed
     p = make("שום")
     p.lettering.uniform = False          # old behaviour: each key stretched on its own

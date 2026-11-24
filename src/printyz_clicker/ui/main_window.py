@@ -23,7 +23,7 @@ from .i18n import is_rtl, language, tr
 from .icons import icon
 from .pages import (
     BodyPage, ColorsPage, ExportPage, FontPage, KeycapPage, KeychainPage, LetteringPage, MechanicalPage,
-    NamePage,
+    NamePage, SymbolsPage,
 )
 from .viewer import Viewer3D
 from .widgets import Page, Segmented
@@ -91,11 +91,7 @@ class MainWindow(QMainWindow):
         self._add_page("body", tr("גוף", "Body"), BodyPage(self.ctl))
         self.colors_page = ColorsPage(self.ctl)
         self._add_page("palette", tr("צבעים", "Colours"), self.colors_page)
-        self._add_page("symbol", tr("סמלים", "Symbols"), PlaceholderPage(
-            tr("סמלים ו־SVG", "Symbols & SVG"),
-            tr("ספריית סמלים וייבוא SVG עדיין לא ממומשים בגיאומטריה. בינתיים אפשר להשאיר מקש ריק "
-               "ולהוסיף SVG ב־Bambu Studio.",
-               "Symbols / SVG are not implemented yet. Use a blank key and add the SVG in Bambu Studio.")))
+        self._add_page("symbol", tr("סמלים", "Symbols"), SymbolsPage(self.ctl))
         self._add_page("keychain", tr("מחזיק", "Keychain"), KeychainPage(self.ctl))
         self._add_page("mech", tr("מכאני", "Fit"), MechanicalPage(self.ctl), dev_only=True)
         self.export_page = ExportPage(self.ctl, self.export)
@@ -133,7 +129,8 @@ class MainWindow(QMainWindow):
         if not self.ctl.project.text:
             self.ctl.set_text("PRINTYZ" if language() == "en" else "שלום")
         else:
-            self.ctl.touch()
+            self.ctl.touch(record=False)
+        self.ctl.reset_history()
 
     # ---- layout pieces --------------------------------------------------------------------
     def _top_bar(self) -> QWidget:

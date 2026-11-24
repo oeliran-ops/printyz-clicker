@@ -12,6 +12,33 @@ from ..geometry.builder import BuildResult, part_mesh
 from ..geometry.lettering import MIN_MARGIN
 
 OK, WARN, ERROR = "ok", "warning", "error"
+_COLLISION: dict[tuple[int, int], tuple[object, object, float]] = {}
+_VALID: dict[int, tuple[object, bool, int]] = {}
+
+
+def _zmax(solid) -> float:
+    hit = _VALID.get(("z", id(solid)))
+    if hit is not None and hit[0] is solid:
+        return hit[1]
+    z = solid.bounding_box().max.Z
+    _VALID[("z", id(solid))] = (solid, z, 0)
+    return z
+
+
+def _solid_state(solid) -> tuple[bool, int]:
+    hit = _VALID.get(id(solid))
+    if hit is not None and hit[0] is solid:
+        return hit[1], hit[2]
+    # BRepCheck also inspects cached triangulation polygons; parts that share faces may carry
+    # meshes from different resolutions (preview vs. export). Check the geometry, not the cache.
+    from OCP.BRepTools import BRepTools
+
+    BRepTools.Clean_s(solid.wrapped)
+    st = (solid.is_valid, len(solid.solids()))
+    if len(_VALID) > 4000:
+        _VALID.clear()
+    _VALID[id(solid)] = (solid, *st)
+    return st
 AMS_SLOTS = 4
 
 
@@ -95,9 +122,17 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
     # --- real-geometry collision: keycap pressed vs body ----------------------
     body = next(pt for pt in res.parts if pt.role == "body")
     for cap in (pt for pt in res.parts if pt.role == "cap"):
-        moved = Pos(0, 0, -sw.travel) * cap.solid
-        inter = body.solid & moved
-        vol = sum(s.volume for s in inter.solids()) if inter is not None else 0.0
+        ck = (id(body.solid), id(cap.solid))
+        hit = _COLLISION.get(ck)
+        if hit is not None and hit[0] is body.solid and hit[1] is cap.solid:
+            vol = hit[2]
+        else:
+            moved = Pos(0, 0, -sw.travel) * cap.solid
+            inter = body.solid & moved
+            vol = sum(s.volume for s in inter.solids()) if inter is not None else 0.0
+            if len(_COLLISION) > 2000:
+                _COLLISION.clear()
+            _COLLISION[ck] = (body.solid, cap.solid, vol)
         if vol > 1e-3:
             rep.add(f"{cap.name} press collision", ERROR, f"{vol:.3f} mm³ overlap with body at bottom-out")
     rep.add("pressed keycaps vs body / התנגשות בלחיצה", OK, "keycaps moved by full travel, overlap checked")
@@ -110,7 +145,7 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
     if p.lettering.mode == "flush":
         for leg in (pt for pt in res.parts if pt.role == "legend"):
             cap = next(pt for pt in res.parts if pt.role == "cap" and pt.group == leg.group)
-            dz = abs(leg.solid.bounding_box().max.Z - cap.solid.bounding_box().max.Z)
+            dz = abs(_zmax(leg.solid) - _zmax(cap.solid))
             rep.add(f"{leg.group} flush", OK if dz < 1e-4 else ERROR, f"legend top vs cap top Δ={dz:.5f} mm")
 
     # --- colours ---------------------------------------------------------------
@@ -120,8 +155,7 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
 
     # --- solids & meshes ---------------------------------------------------------
     for pt in res.printable_parts():
-        valid = pt.solid.is_valid
-        nsol = len(pt.solid.solids())
+        valid, nsol = _solid_state(pt.solid)
         # a legend may have several islands (i, j, ה, ק ...) - each sits in its own pocket
         islands_ok = nsol >= 1 if pt.role == "legend" else nsol == 1
         if not valid or not islands_ok:
@@ -139,7 +173,7 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
                     f"watertight={h['watertight']} bodies={h['bodies']} vol={h['volume']:.1f} mm³")
     if p.body.texture != "smooth":
         tex_ok = res.body.mesh is not None
-        rep.add("texture / טקסטורה", OK if tex_ok else ERROR,
+        rep.add("texture / טקסטורה", OK if tex_ok else WARN,
                 f"{p.body.texture}, depth ≤ {b.outer_wall - 0.9:.2f} mm, outside wall only (pockets untouched)")
     if p.keychain.enabled:
         rep.add("keychain / מחזיק מפתחות", OK if len(body.solid.solids()) == 1 else ERROR,

@@ -1,0 +1,770 @@
+[
+ {
+  "dir": "rubik",
+  "family": "Rubik",
+  "weight": 400,
+  "file": "rubik-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "rubik",
+  "family": "Rubik",
+  "weight": 700,
+  "file": "rubik-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "heebo",
+  "family": "Heebo",
+  "weight": 400,
+  "file": "heebo-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "heebo",
+  "family": "Heebo",
+  "weight": 700,
+  "file": "heebo-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "assistant",
+  "family": "Assistant",
+  "weight": 400,
+  "file": "assistant-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "assistant",
+  "family": "Assistant",
+  "weight": 700,
+  "file": "assistant-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "secularone",
+  "family": "Secular One",
+  "weight": 400,
+  "file": "secularone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "varelaround",
+  "family": "Varela Round",
+  "weight": 400,
+  "file": "varelaround-400.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "suezone",
+  "family": "Suez One",
+  "weight": 400,
+  "file": "suezone-400.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "frankruhllibre",
+  "family": "Frank Ruhl Libre",
+  "weight": 400,
+  "file": "frankruhllibre-400.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "frankruhllibre",
+  "family": "Frank Ruhl Libre",
+  "weight": 700,
+  "file": "frankruhllibre-700.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "davidlibre",
+  "family": "David Libre",
+  "weight": 400,
+  "file": "davidlibre-400.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "davidlibre",
+  "family": "David Libre",
+  "weight": 700,
+  "file": "davidlibre-700.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "karantina",
+  "family": "Karantina",
+  "weight": 400,
+  "file": "karantina-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "karantina",
+  "family": "Karantina",
+  "weight": 700,
+  "file": "karantina-700.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "fredoka",
+  "family": "Fredoka",
+  "weight": 400,
+  "file": "fredoka-400.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "fredoka",
+  "family": "Fredoka",
+  "weight": 700,
+  "file": "fredoka-700.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "ibmplexsanshebrew",
+  "family": "IBM Plex Sans Hebrew",
+  "weight": 400,
+  "file": "ibmplexsanshebrew-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "ibmplexsanshebrew",
+  "family": "IBM Plex Sans Hebrew",
+  "weight": 700,
+  "file": "ibmplexsanshebrew-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "playpensanshebrew",
+  "family": "Playpen Sans Hebrew",
+  "weight": 400,
+  "file": "playpensanshebrew-400.ttf",
+  "category": "hand",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "playpensanshebrew",
+  "family": "Playpen Sans Hebrew",
+  "weight": 700,
+  "file": "playpensanshebrew-700.ttf",
+  "category": "hand",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "notosanshebrew",
+  "family": "Noto Sans Hebrew",
+  "weight": 400,
+  "file": "notosanshebrew-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "notosanshebrew",
+  "family": "Noto Sans Hebrew",
+  "weight": 700,
+  "file": "notosanshebrew-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "opensans",
+  "family": "Open Sans",
+  "weight": 400,
+  "file": "opensans-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "opensans",
+  "family": "Open Sans",
+  "weight": 700,
+  "file": "opensans-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "alef",
+  "family": "Alef",
+  "weight": 400,
+  "file": "alef-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "alef",
+  "family": "Alef",
+  "weight": 700,
+  "file": "alef-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "miriamlibre",
+  "family": "Miriam Libre",
+  "weight": 400,
+  "file": "miriamlibre-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "miriamlibre",
+  "family": "Miriam Libre",
+  "weight": 700,
+  "file": "miriamlibre-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "notoserifhebrew",
+  "family": "Noto Serif Hebrew",
+  "weight": 400,
+  "file": "notoserifhebrew-400.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "notoserifhebrew",
+  "family": "Noto Serif Hebrew",
+  "weight": 700,
+  "file": "notoserifhebrew-700.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "bonanova",
+  "family": "Bona Nova",
+  "weight": 400,
+  "file": "bonanova-400.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "bonanova",
+  "family": "Bona Nova",
+  "weight": 700,
+  "file": "bonanova-700.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "anton",
+  "family": "Anton",
+  "weight": 400,
+  "file": "anton-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "bebasneue",
+  "family": "Bebas Neue",
+  "weight": 400,
+  "file": "bebasneue-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "bungee",
+  "family": "Bungee",
+  "weight": 400,
+  "file": "bungee-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "archivoblack",
+  "family": "Archivo Black",
+  "weight": 400,
+  "file": "archivoblack-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "bangers",
+  "family": "Bangers",
+  "weight": 400,
+  "file": "bangers-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "lilitaone",
+  "family": "Lilita One",
+  "weight": 400,
+  "file": "lilitaone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "luckiestguy",
+  "family": "Luckiest Guy",
+  "weight": 400,
+  "file": "luckiestguy-400.ttf",
+  "category": "display",
+  "license": "Apache-2.0"
+ },
+ {
+  "dir": "righteous",
+  "family": "Righteous",
+  "weight": 400,
+  "file": "righteous-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "russoone",
+  "family": "Russo One",
+  "weight": 400,
+  "file": "russoone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "titanone",
+  "family": "Titan One",
+  "weight": 400,
+  "file": "titanone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "chakrapetch",
+  "family": "Chakra Petch",
+  "weight": 400,
+  "file": "chakrapetch-400.ttf",
+  "category": "tech",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "chakrapetch",
+  "family": "Chakra Petch",
+  "weight": 700,
+  "file": "chakrapetch-700.ttf",
+  "category": "tech",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "audiowide",
+  "family": "Audiowide",
+  "weight": 400,
+  "file": "audiowide-400.ttf",
+  "category": "tech",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "orbitron",
+  "family": "Orbitron",
+  "weight": 400,
+  "file": "orbitron-400.ttf",
+  "category": "tech",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "orbitron",
+  "family": "Orbitron",
+  "weight": 700,
+  "file": "orbitron-700.ttf",
+  "category": "tech",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "pressstart2p",
+  "family": "Press Start 2P",
+  "weight": 400,
+  "file": "pressstart2p-400.ttf",
+  "category": "pixel",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "pacifico",
+  "family": "Pacifico",
+  "weight": 400,
+  "file": "pacifico-400.ttf",
+  "category": "script",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "lobster",
+  "family": "Lobster",
+  "weight": 400,
+  "file": "lobster-400.ttf",
+  "category": "script",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "oswald",
+  "family": "Oswald",
+  "weight": 400,
+  "file": "oswald-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "oswald",
+  "family": "Oswald",
+  "weight": 700,
+  "file": "oswald-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "montserrat",
+  "family": "Montserrat",
+  "weight": 400,
+  "file": "montserrat-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "montserrat",
+  "family": "Montserrat",
+  "weight": 700,
+  "file": "montserrat-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "poppins",
+  "family": "Poppins",
+  "weight": 400,
+  "file": "poppins-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "poppins",
+  "family": "Poppins",
+  "weight": 700,
+  "file": "poppins-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "robotoslab",
+  "family": "Roboto Slab",
+  "weight": 400,
+  "file": "robotoslab-400.ttf",
+  "category": "serif",
+  "license": "Apache-2.0"
+ },
+ {
+  "dir": "robotoslab",
+  "family": "Roboto Slab",
+  "weight": 700,
+  "file": "robotoslab-700.ttf",
+  "category": "serif",
+  "license": "Apache-2.0"
+ },
+ {
+  "dir": "arvo",
+  "family": "Arvo",
+  "weight": 400,
+  "file": "arvo-400.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "arvo",
+  "family": "Arvo",
+  "weight": 700,
+  "file": "arvo-700.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "alfaslabone",
+  "family": "Alfa Slab One",
+  "weight": 400,
+  "file": "alfaslabone-400.ttf",
+  "category": "serif",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "bowlbyone",
+  "family": "Bowlby One",
+  "weight": 400,
+  "file": "bowlbyone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "passionone",
+  "family": "Passion One",
+  "weight": 400,
+  "file": "passionone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "passionone",
+  "family": "Passion One",
+  "weight": 700,
+  "file": "passionone-700.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "concertone",
+  "family": "Concert One",
+  "weight": 400,
+  "file": "concertone-400.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "kanit",
+  "family": "Kanit",
+  "weight": 400,
+  "file": "kanit-400.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "kanit",
+  "family": "Kanit",
+  "weight": 700,
+  "file": "kanit-700.ttf",
+  "category": "sans",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "exo2",
+  "family": "Exo 2",
+  "weight": 400,
+  "file": "exo2-400.ttf",
+  "category": "tech",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "exo2",
+  "family": "Exo 2",
+  "weight": 700,
+  "file": "exo2-700.ttf",
+  "category": "tech",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "teko",
+  "family": "Teko",
+  "weight": 400,
+  "file": "teko-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "teko",
+  "family": "Teko",
+  "weight": 700,
+  "file": "teko-700.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "staatliches",
+  "family": "Staatliches",
+  "weight": 400,
+  "file": "staatliches-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "rammettoone",
+  "family": "Rammetto One",
+  "weight": 400,
+  "file": "rammettoone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "racingsansone",
+  "family": "Racing Sans One",
+  "weight": 400,
+  "file": "racingsansone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "rubikmonoone",
+  "family": "Rubik Mono One",
+  "weight": 400,
+  "file": "rubikmonoone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "blackopsone",
+  "family": "Black Ops One",
+  "weight": 400,
+  "file": "blackopsone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "changaone",
+  "family": "Changa One",
+  "weight": 400,
+  "file": "changaone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "fjallaone",
+  "family": "Fjalla One",
+  "weight": 400,
+  "file": "fjallaone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "paytoneone",
+  "family": "Paytone One",
+  "weight": 400,
+  "file": "paytoneone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "squadaone",
+  "family": "Squada One",
+  "weight": 400,
+  "file": "squadaone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "carterone",
+  "family": "Carter One",
+  "weight": 400,
+  "file": "carterone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "nunito",
+  "family": "Nunito",
+  "weight": 400,
+  "file": "nunito-400.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "nunito",
+  "family": "Nunito",
+  "weight": 700,
+  "file": "nunito-700.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "comfortaa",
+  "family": "Comfortaa",
+  "weight": 400,
+  "file": "comfortaa-400.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "comfortaa",
+  "family": "Comfortaa",
+  "weight": 700,
+  "file": "comfortaa-700.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "quicksand",
+  "family": "Quicksand",
+  "weight": 400,
+  "file": "quicksand-400.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "quicksand",
+  "family": "Quicksand",
+  "weight": 700,
+  "file": "quicksand-700.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "baloo2",
+  "family": "Baloo 2",
+  "weight": 400,
+  "file": "baloo2-400.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "baloo2",
+  "family": "Baloo 2",
+  "weight": 700,
+  "file": "baloo2-700.ttf",
+  "category": "rounded",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "sigmar",
+  "family": "Sigmar",
+  "weight": 400,
+  "file": "sigmar-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "bagelfatone",
+  "family": "Bagel Fat One",
+  "weight": 400,
+  "file": "bagelfatone-400.ttf",
+  "category": "display",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "shrikhand",
+  "family": "Shrikhand",
+  "weight": 400,
+  "file": "shrikhand-400.ttf",
+  "category": "script",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "caveatbrush",
+  "family": "Caveat Brush",
+  "weight": 400,
+  "file": "caveatbrush-400.ttf",
+  "category": "hand",
+  "license": "OFL-1.1"
+ },
+ {
+  "dir": "permanentmarker",
+  "family": "Permanent Marker",
+  "weight": 400,
+  "file": "permanentmarker-400.ttf",
+  "category": "hand",
+  "license": "Apache-2.0"
+ },
+ {
+  "dir": "specialelite",
+  "family": "Special Elite",
+  "weight": 400,
+  "file": "specialelite-400.ttf",
+  "category": "texture",
+  "license": "Apache-2.0"
+ }
+]

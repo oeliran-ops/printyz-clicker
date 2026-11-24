@@ -72,3 +72,20 @@ def test_niqqud_attached_and_spaces():
     toks = tokenize("שָׁלוֹם")
     assert len(toks) == 4
     assert tokenize("  a b ") == [("char", "a"), ("blank", ""), ("char", "b")]
+
+
+def test_blank_left_right_in_product_order():
+    from printyz_clicker.text.engine import insert_blank_visual
+    for name in ("שלום", "Dan", "דני 12"):
+        p = proj(name)
+        before = vis(p)
+        insert_blank_visual(p, "left")
+        assert vis(p) == "_" + before
+        insert_blank_visual(p, "right")
+        assert vis(p) == "_" + before + "_"
+    p = proj("שלום")                       # next to a selected key (ל): right of it on the product
+    lamed = next(k for k in p.keys if k.value == "ל")
+    insert_blank_visual(p, "right", lamed.id)
+    assert vis(p) == "םול_ש"
+    insert_blank_visual(p, "left", lamed.id)
+    assert vis(p) == "םו_ל_ש"

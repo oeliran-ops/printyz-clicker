@@ -25,8 +25,15 @@ def tessellate(shape, tol: float = TOLERANCE, ang: float = ANGULAR_TOLERANCE) ->
     # preview) with a fresh fine one leaves gaps along shared edges. Always start clean.
     from OCP.BRepTools import BRepTools
 
-    BRepTools.Clean_s(shape.wrapped)
-    verts, tris = shape.tessellate(tol, ang)
+    for attempt in range(3):
+        BRepTools.Clean_s(shape.wrapped)
+        try:
+            verts, tris = shape.tessellate(tol, ang)
+            break
+        except AttributeError:          # a face OCC could not triangulate at this resolution
+            tol, ang = tol * 0.6, ang * 0.6
+    else:
+        raise ValueError("Mesh generation failed for a part (degenerate face)")
     v = np.array([(p.X, p.Y, p.Z) for p in verts], dtype=np.float64)
     f = np.array(tris, dtype=np.int64).reshape(-1, 3)
     # weld duplicated face-boundary vertices so the mesh is closed / manifold.

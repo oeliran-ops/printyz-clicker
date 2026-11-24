@@ -202,3 +202,44 @@ def keys_visual(project: Project, keys: Sequence[KeySlot] | None = None) -> list
         # explicit override: simple mirror, no bidi run handling
         return list(reversed(keys)) if kd == "rtl" else keys
     return visual_order(keys, kd)
+
+
+def insert_blank_visual(project: Project, side: str, anchor_id: str | None = None) -> KeySlot:
+    """Add a blank key to the LEFT or RIGHT of `anchor_id` as seen on the product
+    (or at the far left / right end). Works for RTL, LTR and mixed names."""
+    vis = keys_visual(project)
+    if anchor_id is None:
+        target = 0 if side == "left" else len(vis)
+    else:
+        idx = next(i for i, k in enumerate(vis) if k.id == anchor_id)
+        target = idx if side == "left" else idx + 1
+    key = KeySlot(id=new_key_id(), kind="blank", value="", source="extra")
+    base = list(project.keys)
+
+    def visual_pos(li: int) -> int:
+        project.keys = base[:li] + [key] + base[li:]
+        return [k.id for k in keys_visual(project)].index(key.id)
+
+    # <= 11 logical slots: take the one that puts the key at the wanted spot (or closest to it)
+    li = min(range(len(base) + 1), key=lambda i: abs(visual_pos(i) - target))
+    project.keys = base[:li] + [key] + base[li:]
+    return key
+
+
+def set_key_content(project: Project, key_id: str, kind: str, value: str) -> KeySlot:
+    """Put a symbol / svg / blank on an existing key. A key that came from the typed name
+    is detached from the text (its character is removed from the name) so later name edits
+    never overwrite it."""
+    key = project.key_by_id(key_id)
+    if key.source == "text":
+        text_keys = [k for k in project.keys if k.source == "text" and k.id != key_id]
+        project.text = "".join(k.value if k.kind == "char" else " " for k in text_keys)
+        key.source = "extra"
+    key.kind, key.value = kind, value  # type: ignore[assignment]
+    return key
+
+
+def insert_key_visual(project: Project, side: str, anchor_id: str | None, kind: str, value: str) -> KeySlot:
+    key = insert_blank_visual(project, side, anchor_id)
+    key.kind, key.value = kind, value  # type: ignore[assignment]
+    return key

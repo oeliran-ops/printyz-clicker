@@ -27,6 +27,8 @@ class FontEntry:
     supports_hebrew: bool = False          # filled by inspect()
     supports_latin: bool = False
     weight: int = 400                      # OS/2 usWeightClass (filled by inspect())
+    stroke_mm: float = 0.0                 # average stroke at 9 mm letter height (0 = not measured)
+    license: str = ""
 
     @property
     def is_bold(self) -> bool:
@@ -46,6 +48,42 @@ def _candidate_default_fonts() -> list[tuple[str, str]]:
     return [(i, p) for i, p in cands if Path(p).exists()]
 
 
+BUNDLED = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+DEFAULT_FONT_ID = "gf:rubik-700"
+MIN_STROKE_MM = 0.85
+
+
+@lru_cache(maxsize=256)
+def measure_stroke(path: str) -> float:
+    """Average stroke width (mm) of real glyph outlines at 9 mm letter height (2*area/perimeter)."""
+    from build123d import Align, Text
+
+    vals = []
+    cm = font_cmap(path)
+    for ch in "RgaSB5שלאם":
+        if ord(ch) not in cm:
+            continue
+        t = Text(ch, font_size=10, font_path=path, align=(Align.CENTER, Align.CENTER))
+        if not t.faces():
+            continue
+        s = 9.0 / max(t.bounding_box().size.Y, 1e-6) if ch.isupper() or "\u0590" <= ch <= "\u05ff" else 0.675
+        area = sum(f.area for f in t.faces()) * s * s
+        per = sum(e.length for f in t.faces() for e in f.edges()) * s
+        vals.append(2 * area / per)
+    vals.sort()
+    return vals[len(vals) // 4] if vals else 0.0
+
+
+def boldness_range(stroke_9mm: float, letter_height: float) -> tuple[float, float]:
+    """Allowed extra weight (mm) so strokes stay >= 0.9 mm and counters stay open."""
+    stroke = stroke_9mm * letter_height / 9.0
+    lo = -max(0.0, min(0.3, stroke / 2 - 0.45))
+    hi = max(0.0, min(0.6, 0.3 * stroke))
+    lo = 0.0 if lo > -0.05 else lo          # offsets of a few hundredths are pointless and fragile
+    hi = 0.0 if hi < 0.05 else hi
+    return round(lo, 2), round(hi, 2)
+
+
 @lru_cache(maxsize=64)
 def font_cmap(path: str) -> frozenset[int]:
     f = TTFont(path, lazy=True, fontNumber=0)
@@ -58,6 +96,11 @@ def missing_glyphs(path: str, text: str) -> list[str]:
 
 
 def inspect(entry: FontEntry) -> FontEntry:
+    if entry.stroke_mm == 0.0 and Path(entry.path).exists():
+        try:
+            entry.stroke_mm = measure_stroke(entry.path)
+        except Exception:  # noqa: BLE001
+            pass
     cmap = font_cmap(entry.path)
     entry.supports_hebrew = all(ord(c) in cmap for c in "אבגדהוזחטיכלמנסעפצקרשתךםןףץ")
     entry.supports_latin = all(ord(c) in cmap for c in "ABCabc0123")
@@ -77,9 +120,19 @@ class FontRegistry:
     @classmethod
     def default(cls, library_file: Optional[Path] = None) -> "FontRegistry":
         reg = cls()
+        cat = BUNDLED / "catalog.json"
+        if cat.exists():
+            for e in json.loads(cat.read_text("utf-8")):
+                fid = f"gf:{e['dir']}-{e['weight']}"
+                reg.fonts[fid] = FontEntry(
+                    id=fid, path=str(BUNDLED / e["file"]), family=e["family"], category=e["category"],
+                    approved=True, weight=e["weight"], stroke_mm=e["stroke_mm"], license=e["license"],
+                    supports_hebrew=e["hebrew"], supports_latin=e["latin"])
         for fid, path in _candidate_default_fonts():
             if fid not in reg.fonts:
-                reg.fonts[fid] = inspect(FontEntry(id=fid, path=path, approved=True))
+                e = inspect(FontEntry(id=fid, path=path))
+                e.approved = e.stroke_mm >= MIN_STROKE_MM      # thin system fonts stay developer-only
+                reg.fonts[fid] = e
         if library_file and library_file.exists():
             reg.load(library_file)
         return reg

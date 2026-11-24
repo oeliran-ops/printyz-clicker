@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Optional
 
 from build123d import Align, Kind, Pos, Sketch, Text, offset
@@ -21,14 +22,60 @@ class LegendInfo:
     warnings: list[str] = field(default_factory=list)
 
 
+def _merge_faces(sk) -> Sketch | None:
+    faces = sk.faces()
+    if not faces:
+        return None
+    out = faces[0]
+    for f in faces[1:]:
+        out = out.fuse(f)
+    return Sketch(out.clean().faces())
+
+
+def glyph_outline(char: str, font_path: str) -> Sketch | None:
+    """Merged outline of one glyph at font size 10, or None if the font's outline is unusable."""
+    try:
+        return merged_outline(Text(char, font_size=10.0, font_path=font_path, align=(Align.CENTER, Align.CENTER)))
+    except Exception:  # noqa: BLE001 - OCC rejects degenerate outlines in some font files
+        return None
+
+
+def merged_outline(text_shape) -> Sketch | None:
+    """Union of all glyph contours: fonts may overlap contours (variable instances, pixel fonts)."""
+    faces = text_shape.faces()
+    if not faces:
+        return None
+    out = faces[0]
+    for f in faces[1:]:
+        out = out.fuse(f)
+    out = out.clean()
+    return Sketch(out.faces())
+
+
+def safe_offset(sk, amount: float):
+    """2-D offset that never raises: ARC, then INTERSECTION joins; None if the outline can't be offset
+    or the result is not a valid region."""
+    for kind in (Kind.ARC, Kind.INTERSECTION):
+        try:
+            out = offset(sk, amount=amount, kind=kind)
+            if out.faces():
+                out = _merge_faces(out)        # grown islands may now touch / overlap: one clean region
+            if out is not None and out.faces() and all(f.is_valid for f in out.faces()):
+                return out
+        except Exception:  # noqa: BLE001 - OCC offset failures on complex outlines
+            continue
+    return None
+
+
 def _counters(sk) -> int:
     return sum(len(f.inner_wires()) for f in sk.faces())
 
 
+@lru_cache(maxsize=2048)
 def glyph_box(char: str, font_path: str) -> tuple[float, float] | None:
     """Glyph outline size at font_size 10 (used to derive one common scale)."""
-    t = Text(char, font_size=10.0, font_path=font_path, align=(Align.CENTER, Align.CENTER))
-    if not t.faces():
+    t = glyph_outline(char, font_path)
+    if t is None:
         return None
     bb = t.bounding_box()
     return bb.size.X, bb.size.Y
@@ -55,6 +102,14 @@ def fit_scale(boxes: list[tuple[float, float]], legend_area: float, spec: Letter
 
 def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringSpec,
                  scale: Optional[float] = None) -> LegendInfo:
+    base = glyph_outline(char, font_path)
+    if base is None:
+        return LegendInfo(None, warnings=[f"לא ניתן לבנות את '{char}' בגופן הזה. / glyph '{char}' unusable in this font."])
+    return build_shape_legend(base, legend_area, spec, scale, label=char)
+
+
+def build_shape_legend(base: Sketch, legend_area: float, spec: LetteringSpec,
+                       scale: Optional[float] = None, label: str = "") -> LegendInfo:
     """Build the glyph sketch, centred on (0,0) + offsets, guaranteed inside the allowed area.
 
     `scale` (from fit_scale over all keys) gives every key the same letter size; without it
@@ -68,10 +123,10 @@ def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringS
         margin = clamped
     avail = legend_area - 2 * margin
     ew = max(-0.3, spec.extra_weight)
+    if abs(ew) < 0.03:
+        ew = 0.0
 
-    base = Text(char, font_size=10.0, font_path=font_path, align=(Align.CENTER, Align.CENTER))
-    if not base.faces():
-        return LegendInfo(None, warnings=warnings + [f"לגליף '{char}' אין גיאומטריה. / glyph has no outline."])
+    char = label
     bb = base.bounding_box()
     if scale is None:
         scale, w2 = fit_scale([(bb.size.X, bb.size.Y)], legend_area, spec)
@@ -82,16 +137,20 @@ def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringS
     sk = base.scale(s)
     if ew > 0:
         before = _counters(sk)
-        sk = offset(sk, amount=ew, kind=Kind.ARC)
-        if _counters(sk) < before:
-            warnings.append("העיבוי סגר חלל פנימי באות. / extra weight closed a counter.")
+        grown = safe_offset(sk, ew)
+        while ew > 0.05 and (grown is None or _counters(grown) < before):
+            ew = round(ew / 2, 3)                      # never fill an "o" / "ם", never fail: back off
+            grown = safe_offset(sk, ew)
+        if grown is not None and _counters(grown) >= before:
+            sk = grown
+            if ew < spec.extra_weight:
+                warnings.append(f"העיבוי הוקטן ל-{ew:.2f} מ\"מ עבור '{char}'. / boldness reduced for '{char}'.")
+        else:
+            warnings.append(f"לא ניתן לעבות את '{char}' — נשאר המשקל המקורי. / '{char}' kept at original weight.")
     elif ew < 0:
         area0 = sum(f.area for f in sk.faces())
-        try:
-            thin = offset(sk, amount=ew, kind=Kind.ARC)
-        except Exception:  # noqa: BLE001
-            thin = None
-        if thin is None or not thin.faces() or sum(f.area for f in thin.faces()) < 0.4 * area0:
+        thin = safe_offset(sk, ew)
+        if thin is None or sum(f.area for f in thin.faces()) < 0.4 * area0:
             warnings.append("הדילול מוחק חלקים מהאות — נשאר המשקל המקורי. / thinning would erase strokes; ignored.")
         else:
             sk = thin
@@ -111,3 +170,13 @@ def build_legend(char: str, font_path: str, legend_area: float, spec: LetteringS
     if not isinstance(sk, Sketch):
         sk = Sketch(sk.faces())
     return LegendInfo(sk, w, h, s, warnings)
+
+
+def min_detail_mm(sk: Sketch) -> float:
+    """Typical feature width of a placed legend (2*area/perimeter, per island; smallest island)."""
+    vals = []
+    for f in sk.faces():
+        per = sum(e.length for e in f.edges())
+        if per > 0:
+            vals.append(2 * f.area / per)
+    return min(vals) if vals else 0.0

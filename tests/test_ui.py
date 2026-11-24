@@ -75,3 +75,35 @@ def test_undo_redo(app):
     assert w.ctl.result.ok and w.ctl.result.body.mesh is not None   # texture really in the geometry
     assert w.pages[0][1].name.text() == "Dan"                          # UI follows the restored project
     w.close()
+
+
+def test_texture_card_updates_viewer(app):
+    """Regression: choosing a texture card must change what the 3D view shows."""
+    set_language("he")
+    w = MainWindow()
+    w.show()
+    w.ctl.wait_idle()
+    body_before = w.viewer._meshes["body"][0].n_cells
+    body_page = next(p for _, p, _ in w.pages if p.__class__.__name__ == "BodyPage")
+    body_page.cards["dots"].clicked.emit("dots")
+    w.ctl.wait_idle()
+    app.processEvents()
+    assert w.ctl.project.body.texture == "dots"
+    assert w.viewer._meshes["body"][0].n_cells > body_before * 2      # textured mesh is on screen
+    w.close()
+
+
+def test_symbols_page_and_blank_sides(app):
+    set_language("he")
+    w = MainWindow()
+    w.show()
+    w.ctl.wait_idle()
+    sp = next(p for _, p, _ in w.pages if p.__class__.__name__ == "SymbolsPage")
+    w.nav.setCurrentRow(next(i for i, (_, p, _) in enumerate(w.pages) if p is sp))
+    app.processEvents()
+    sp._pick(("symbol", "crown"))
+    sp._new("left")
+    w.ctl.wait_idle()
+    assert any(k.kind == "symbol" and k.value == "crown" for k in w.ctl.project.keys)
+    assert w.ctl.result.ok and "key01" in w.ctl.result.legend_boxes
+    w.close()

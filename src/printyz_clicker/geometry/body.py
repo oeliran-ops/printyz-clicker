@@ -24,6 +24,23 @@ class BodyResult:
     warnings: list[str] = field(default_factory=list)
     mesh: object = None        # textured mesh (None = use the B-rep)
     outline: object = None
+    texture_exclude: list = field(default_factory=list)
+
+
+def texture_body(body: "BodyResult", mech: MechanicalProfile, design: BodyDesign):
+    """Textured mesh of an already built body (outer wall only). Returns (mesh, warnings)."""
+    from .texture import MIN_WALL_LEFT, TextureParams, apply_texture
+
+    b = mech.body
+    warnings = []
+    depth = min(design.texture_depth, b.outer_wall - MIN_WALL_LEFT)
+    if depth < design.texture_depth:
+        warnings.append(f"עומק הטקסטורה הוגבל ל-{depth:.2f} מ\"מ כדי לשמור על חוזק הדופן. / "
+                        f"texture depth limited to {depth:.2f} mm.")
+    z0, z1 = b.edge_fillet + 0.6, b.height - b.edge_fillet - 0.6
+    mesh = apply_texture(body.solid, body.outline, TextureParams(design.texture, depth, design.texture_unit),
+                         z0, z1, body.texture_exclude)
+    return mesh, warnings
 
 
 def _rounded_square(w: float, r: float, z: float = 0.0):
@@ -185,14 +202,8 @@ def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign
         raise ValueError(f"Body produced {len(solids)} separate solids (expected 1)")
     bb = outline.bounding_box()
     res = BodyResult(solids[0], (bb.min.X, bb.min.Y, bb.max.X, bb.max.Y), hole_xy, warnings, outline=outline)
+    res.texture_exclude = exclude
     if design.texture != "smooth":
-        from .texture import MIN_WALL_LEFT, TextureParams, apply_texture
-
-        depth = min(design.texture_depth, b.outer_wall - MIN_WALL_LEFT)
-        if depth < design.texture_depth:
-            warnings.append(f"עומק הטקסטורה הוגבל ל-{depth:.2f} מ\"מ כדי לשמור על חוזק הדופן. / "
-                            f"texture depth limited to {depth:.2f} mm.")
-        z0, z1 = b.edge_fillet + 0.6, b.height - b.edge_fillet - 0.6
-        res.mesh = apply_texture(res.solid, outline, TextureParams(design.texture, depth, design.texture_unit),
-                                 z0, z1, exclude)
+        res.mesh, w = texture_body(res, mech, design)
+        warnings += w
     return res

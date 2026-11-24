@@ -51,7 +51,7 @@ class LayoutSpec:
 @dataclass
 class LetteringSpec:
     mode: LegendMode = "flush"
-    font_id: str = "default-bold"
+    font_id: str = "gf:rubik-700"
     extra_weight: float = 0.0       # mm of real outline growth (negative = thinner, min -0.3)
     size: Optional[float] = None    # requested height (mm) of the tallest glyph; None = largest that fits
     uniform: bool = True            # one scale for all keys (consistent letter size)

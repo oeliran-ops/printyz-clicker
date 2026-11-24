@@ -57,7 +57,7 @@ class ProjectController(QObject):
         self._pool.setMaxThreadCount(1)   # OCC is driven from one worker thread only
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.setInterval(350)
+        self._timer.setInterval(200)
         self._timer.timeout.connect(self._start_build)
         # undo history: a snapshot is committed once edits pause (a slider drag = one step)
         self._undo: list[Project] = []
@@ -91,6 +91,14 @@ class ProjectController(QObject):
         self._stable = copy.deepcopy(self.project)
         self.history_changed.emit(True, False)
 
+    def reset_history(self) -> None:
+        """Start the undo history at the current project (after loading / initial setup)."""
+        self._hist_timer.stop()
+        self._undo.clear()
+        self._redo.clear()
+        self._stable = copy.deepcopy(self.project)
+        self.history_changed.emit(False, False)
+
     def _restore(self, snap: Project) -> None:
         self.project = copy.deepcopy(snap)
         self._stable = copy.deepcopy(snap)
@@ -110,14 +118,11 @@ class ProjectController(QObject):
             self._restore(self._redo.pop())
 
     def replace_project(self, project: Project) -> None:
-        self._undo.clear()
-        self._redo.clear()
-        self._stable = copy.deepcopy(project)
-        self.history_changed.emit(False, False)
         self.project = project
         self.last_sync = sync_keys_from_text(project, project.text) if not project.keys else SyncResult(
             total_keys=len(project.keys))
-        self.touch()
+        self.touch(record=False)
+        self.reset_history()
 
     # ---- building ------------------------------------------------------------
     def _start_build(self) -> None:
