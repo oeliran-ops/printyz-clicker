@@ -46,7 +46,12 @@ class ProjectController(QObject):
         super().__init__()
         self.fonts = fonts
         self.project = project or Project(name="PRINTYZ")
-        self.developer_mode = True
+        from ..config.customer_policy import CustomerPolicy
+        from ..edition import is_customer, policy_path
+
+        self.customer_edition = is_customer()
+        self.developer_mode = not self.customer_edition
+        self.policy = CustomerPolicy.load(policy_path())
         self.last_sync = SyncResult()
         self.result: BuildResult | None = None
         self.report: ValidationReport | None = None
@@ -67,6 +72,25 @@ class ProjectController(QObject):
         self._hist_timer.setSingleShot(True)
         self._hist_timer.setInterval(600)
         self._hist_timer.timeout.connect(self._commit_history)
+
+    @property
+    def restricted(self) -> bool:
+        """Customer edition, or the developer previewing customer mode."""
+        return not self.developer_mode
+
+    def policy_violations(self) -> list[str]:
+        return self.policy.violations(self.project) if self.restricted else []
+
+    def apply_policy_defaults(self) -> None:
+        """Customer side: colours must come from the stock list."""
+        pol = self.policy
+        c = self.project.colors
+        if not pol.color_allowed(c.body):
+            c.body = pol.default_body
+        if not pol.color_allowed(c.cap):
+            c.cap = pol.default_cap
+        if not pol.color_allowed(c.legend):
+            c.legend = pol.default_legend
 
     # ---- edits ---------------------------------------------------------------
     def set_text(self, text: str) -> None:

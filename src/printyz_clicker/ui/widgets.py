@@ -116,15 +116,28 @@ class ColorButton(QPushButton):
     def set_color(self, color: str) -> None:
         self._color = color.upper()
         fg = "#000000" if QColor(color).lightness() > 140 else "#FFFFFF"
-        self.setText(self._color)
+        names = dict((h.upper(), n) for h, n in (self.restrict or []))
+        name = names.get(self._color)
+        self.setText(name or self._color)
+        font = "" if name else "font-family: Consolas, monospace;"     # names in the normal UI font
         self.setStyleSheet(f"QPushButton {{ background: {color}; color: {fg}; border: 1px solid #C9CED6; "
-                           f"border-radius: 8px; padding: 7px 12px; font-family: Consolas, monospace; }}")
+                           f"border-radius: 8px; padding: 7px 12px; {font} }}"
+                           f"QPushButton:disabled {{ background: #F1F3F6; color: #A9AEB6; }}")
+
+    def clear(self, text: str = "—") -> None:
+        self._color = ""
+        self.setText(text)
+        self.setStyleSheet("QPushButton { background: #F1F3F6; color: #A9AEB6; border: 1px solid #E2E5EA; "
+                           "border-radius: 8px; padding: 7px 12px; }")
 
     def color(self) -> str:
         return self._color
 
+    # customer edition: only these (hex, name) filaments, no free colour dialog
+    restrict: list[tuple[str, str]] | None = None
+
     def _open(self) -> None:
-        pop = SwatchPopup(self._color, self)
+        pop = SwatchPopup(self._color, self, self.restrict)
         pop.picked.connect(self._apply)
         pos = self.mapToGlobal(self.rect().bottomLeft())
         pop.move(pos)
@@ -138,11 +151,24 @@ class ColorButton(QPushButton):
 class SwatchPopup(QFrame):
     picked = Signal(str)
 
-    def __init__(self, current: str, parent: QWidget | None = None):
+    def __init__(self, current: str, parent: QWidget | None = None,
+                 restrict: list[tuple[str, str]] | None = None):
         super().__init__(parent, Qt.Popup)
         self.setObjectName("Card")
         self.setStyleSheet("#Card { background: white; border: 1px solid #D5DAE1; border-radius: 10px; }")
         lay = QVBoxLayout(self)
+        self._current = current
+        if restrict is not None:
+            # inventory filaments only, with their names - no free colour choice
+            for hex_, name in restrict:
+                b = QPushButton(f"  {name}")
+                fg = "#000000" if QColor(hex_).lightness() > 140 else "#FFFFFF"
+                border = "2px solid #2F6FED" if hex_.upper() == current.upper() else "1px solid #C9CED6"
+                b.setStyleSheet(f"QPushButton {{ background:{hex_}; color:{fg}; border:{border}; border-radius:8px; "
+                                f"padding:6px 14px; text-align:left; }}")
+                b.clicked.connect(lambda _=False, col=hex_: self._pick(col))
+                lay.addWidget(b)
+            return
         grid = QHBoxLayout()
         rows = [FILAMENT_SWATCHES[:8], FILAMENT_SWATCHES[8:]]
         for row in rows:
@@ -160,7 +186,6 @@ class SwatchPopup(QFrame):
         more.clicked.connect(self._dialog)
         grid.addWidget(more)
         lay.addLayout(grid)
-        self._current = current
 
     def _pick(self, c: str) -> None:
         self.picked.emit(c)

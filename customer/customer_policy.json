@@ -1,0 +1,56 @@
+{
+ "colors": [
+  {
+   "name": "לבן",
+   "hex": "#F2F2F2",
+   "in_stock": true
+  },
+  {
+   "name": "שחור",
+   "hex": "#2B2B2B",
+   "in_stock": true
+  },
+  {
+   "name": "צהוב",
+   "hex": "#FFD400",
+   "in_stock": true
+  }
+ ],
+ "default_body": "#F2F2F2",
+ "default_cap": "#2B2B2B",
+ "default_legend": "#FFD400",
+ "fonts": [],
+ "symbols_allowed": true,
+ "svg_import": false,
+ "textures": [
+  "smooth",
+  "diamond",
+  "ribs",
+  "fluted",
+  "dots",
+  "chevron"
+ ],
+ "keycap_styles": [
+  "standard",
+  "low_profile",
+  "thocky"
+ ],
+ "layouts": [
+  "row",
+  "column",
+  "grid",
+  "wasd",
+  "arrows",
+  "custom"
+ ],
+ "legend_modes": [
+  "flush",
+  "raised",
+  "engraved"
+ ],
+ "max_keys": 10,
+ "keychain": true,
+ "per_key_colors": true,
+ "shop_name": "PRINTYZ",
+ "shop_contact": ""
+}

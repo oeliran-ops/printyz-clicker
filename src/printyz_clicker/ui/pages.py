@@ -310,6 +310,7 @@ class NamePage(Page):
         self.strip.refresh()
         for k, c in self.layout_cards.items():
             c.set_selected(k == p.layout.style)
+            c.setVisible(not self.ctl.restricted or k in self.ctl.policy.layouts or k == p.layout.style)
         self.rows.set_value(p.layout.rows)
         self.cols.set_value(p.layout.cols)
         self.fill.blockSignals(True)
@@ -480,6 +481,9 @@ class FontPage(Page):
         lang = self.lang.currentData()
         cur = self.ctl.project.lettering.font_id
         fonts = list(self.ctl.fonts.fonts.values()) if dev else self.ctl.fonts.customer_fonts()
+        if self.ctl.restricted and self.ctl.policy.fonts:
+            allowed = set(self.ctl.policy.fonts)
+            fonts = [f for f in fonts if f.id in allowed or f.id == self.ctl.project.lettering.font_id]
         # one card per family: the selected variant, else the boldest approved one
         fam: dict[str, FontEntry] = {}
         for e in fonts:
@@ -589,6 +593,8 @@ class LetteringPage(Page):
     def refresh(self) -> None:
         L = self.ctl.project.lettering
         self.mode.set_value(L.mode)
+        for m in ("flush", "raised", "engraved"):
+            self.mode.buttons[m].setVisible(not self.ctl.restricted or m in self.ctl.policy.legend_modes)
         hints = {
             "flush": tr("האות בצבע נפרד ובגובה זהה בדיוק לפני הכובע. מודפס כשפני הכובע על המגש.",
                         "Different colour, exactly level with the keycap top. Printed face-down."),
@@ -765,6 +771,7 @@ class KeycapPage(Page):
         st = KEYCAP_STYLES[p.keycap_style]
         for sid, c in self.cards.items():
             c.set_selected(sid == p.keycap_style)
+            c.setVisible(not self.ctl.restricted or sid in self.ctl.policy.keycap_styles)
         lo = round(min_keycap_height(st) + 0.05, 1)
         for w in (self.height.spin, self.height.slider):
             w.blockSignals(True)
@@ -830,6 +837,7 @@ class BodyPage(Page):
         b = self.ctl.project.body
         for k, c in self.cards.items():
             c.set_selected(k == b.texture)
+            c.setVisible(not self.ctl.restricted or k in self.ctl.policy.textures)
         for w, v in ((self.tdepth, b.texture_depth), (self.tunit, b.texture_unit), (self.depth, b.groove_depth)):
             w.blockSignals(True)
             w.setValue(v)
@@ -909,6 +917,12 @@ class ColorsPage(Page):
 
     def refresh(self) -> None:
         p = self.ctl.project
+        restrict = ([(c.hex, c.name) for c in self.ctl.policy.stock_colors()] if self.ctl.restricted else None)
+        for b in (self.body, self.cap, self.legend, self.kcap, self.kleg):
+            b.restrict = restrict
+        per_key = not self.ctl.restricted or self.ctl.policy.per_key_colors
+        for w in (self.strip, self.kcap, self.kleg, self.kreset):
+            w.setVisible(per_key)
         self.blank.blockSignals(True)
         self.blank.setChecked(p.blank_legends)
         self.blank.blockSignals(False)
@@ -924,6 +938,9 @@ class ColorsPage(Page):
             k = p.key_by_id(self.strip.current)
             self.kcap.set_color(p.cap_color(k))
             self.kleg.set_color(p.legend_color(k))
+        else:
+            self.kcap.clear(tr("בחר מקש", "Select a key"))
+            self.kleg.clear(tr("בחר מקש", "Select a key"))
         cols = {p.colors.body.upper()} | {p.cap_color(k).upper() for k in p.keys} | {
             p.legend_color(k).upper() for k in p.keys if k.kind == "char"}
         warn = len(cols) > 4
@@ -1230,6 +1247,7 @@ class SymbolsPage(Page):
         self._symbols = SYMBOLS
         imp = QPushButton(tr("ייבוא קובץ SVG…", "Import SVG file…"))
         imp.clicked.connect(self._import_svg)
+        self.imp_btn = imp
         self.add(imp)
         self.svg_info = self.hint("")
         self.section(tr("מקשים (לפי סדר המוצר)", "Keys (product order)"))
@@ -1394,6 +1412,11 @@ class SymbolsPage(Page):
 
     def refresh(self) -> None:
         self.edit_lib.setVisible(self.ctl.developer_mode)
+        r = self.ctl.restricted
+        self.imp_btn.setVisible(not r or self.ctl.policy.svg_import)
+        allowed = not r or self.ctl.policy.symbols_allowed
+        for w in (self.sym_list, self.toggle_btn, self.smaller, self.bigger):
+            w.setVisible(allowed and (w is not self.sym_list or self.toggle_btn.isChecked()))
         if self._icons_built and getattr(self, "_grid_mode", None) != self.ctl.developer_mode:
             self._rebuild_grid()
         self._grid_mode = self.ctl.developer_mode
@@ -1411,3 +1434,217 @@ class SymbolsPage(Page):
         else:
             msg = tr("מוכן — לחץ \"החל על המקש שנבחר\".", "Ready - press Apply.")
         self.status.setText(f"{msg}  ({n}/10)")
+
+
+# ---------------------------------------------------------------------------------------------
+class OrderPage(Page):
+    """Customer edition: contact details + save the order file to send to the shop."""
+
+    def __init__(self, ctl: ProjectController, save_order):
+        super().__init__(tr("הזמנה", "Order"))
+        self.ctl = ctl
+        self.shop = self.hint("")
+        self.section(tr("פרטי המזמין", "Your details"))
+        from PySide6.QtWidgets import QFormLayout, QPlainTextEdit
+
+        f = QFormLayout()
+        self.c_name = QLineEdit()
+        self.c_phone = QLineEdit()
+        self.c_notes = QPlainTextEdit()
+        self.c_notes.setFixedHeight(80)
+        f.addRow(tr("שם", "Name"), self.c_name)
+        f.addRow(tr("טלפון / אימייל", "Phone / email"), self.c_phone)
+        f.addRow(tr("הערות", "Notes"), self.c_notes)
+        self.lay.addLayout(f)
+        self.problems = self.hint("", "Error")
+        btn = QPushButton(tr("שמירת קובץ הזמנה", "Save order file"))
+        btn.setObjectName("Primary")
+        btn.clicked.connect(save_order)
+        self.add(btn)
+        self.hint(tr("נוצר קובץ ‎.printyz-order עם העיצוב, תמונות וסיכום. שלח אותו לחנות (וואטסאפ / מייל).",
+                     "A .printyz-order file is created with the design, images and a summary. Send it to the shop."))
+        self.finish()
+        ctl.changed.connect(self.refresh)
+        self.refresh()
+
+    def customer(self) -> dict:
+        return {"name": self.c_name.text().strip(), "contact": self.c_phone.text().strip(),
+                "notes": self.c_notes.toPlainText().strip()}
+
+    def refresh(self) -> None:
+        pol = self.ctl.policy
+        self.shop.setText(f"{pol.shop_name}" + (f" · {pol.shop_contact}" if pol.shop_contact else ""))
+        v = self.ctl.policy_violations()
+        self.problems.setText("\n".join(v))
+        self.problems.setVisible(bool(v))
+
+
+# ---------------------------------------------------------------------------------------------
+class CustomerSettingsPage(Page):
+    """Developer: what the customer edition allows (stock colours, fonts, textures, limits)."""
+
+    def __init__(self, ctl: ProjectController, policy_file: Path):
+        super().__init__(tr("הגדרות לקוח", "Customer settings"))
+        from PySide6.QtWidgets import QFormLayout
+
+        from ..config.mechanical import KEYCAP_STYLES
+
+        self.ctl = ctl
+        self.file = policy_file
+        self.hint(tr("כאן קובעים מה הלקוח יכול לבחור בגרסת הלקוח. לבדיקה: \"מצב לקוח\" בתפריט העליון.",
+                     "What the customer edition allows. Preview it with 'Customer mode' at the top."))
+        pol = ctl.policy
+
+        self.section(tr("פרטי החנות", "Shop"))
+        f = QFormLayout()
+        self.shop_name = QLineEdit(pol.shop_name)
+        self.shop_contact = QLineEdit(pol.shop_contact)
+        f.addRow(tr("שם", "Name"), self.shop_name)
+        f.addRow(tr("יצירת קשר", "Contact"), self.shop_contact)
+        self.lay.addLayout(f)
+        for w in (self.shop_name, self.shop_contact):
+            w.editingFinished.connect(self._save)
+
+        self.section(tr("צבעים במלאי", "Colours in stock"))
+        self.color_rows = QVBoxLayout()
+        self.lay.addLayout(self.color_rows)
+        add = QPushButton(tr("+ הוסף צבע", "+ Add colour"))
+        add.clicked.connect(self._add_color)
+        self.add(add)
+
+        def checks(title, options, current):
+            self.section(title)
+            boxes = {}
+            row = QGridLayout()
+            for i, (key, label) in enumerate(options):
+                cb = QCheckBox(label)
+                cb.setChecked(key in current)
+                cb.toggled.connect(lambda _=False: self._save())
+                row.addWidget(cb, i // 2, i % 2)
+                boxes[key] = cb
+            self.lay.addLayout(row)
+            return boxes
+
+        self.tex_boxes = checks(tr("טקסטורות", "Textures"), [(k, k) for k in
+                                ("smooth", "diamond", "ribs", "fluted", "dots", "chevron")], pol.textures)
+        self.style_boxes = checks(tr("סוגי כובעים", "Keycap styles"), [(k, k) for k in KEYCAP_STYLES], pol.keycap_styles)
+        self.layout_boxes = checks(tr("פריסות", "Layouts"), [(k, k) for k in
+                                   ("row", "column", "grid", "wasd", "arrows", "custom")], pol.layouts)
+        self.mode_boxes = checks(tr("סגנונות כיתוב", "Lettering modes"), [(k, k) for k in
+                                 ("flush", "raised", "engraved")], pol.legend_modes)
+
+        self.section(tr("גופנים ללקוח (ריק = כל המאושרים)", "Customer fonts (none = all approved)"))
+        self.font_boxes = {}
+        fg = QGridLayout()
+        fams = {}
+        for e in sorted(ctl.fonts.customer_fonts(), key=lambda e: e.family.lower()):
+            fams.setdefault(e.family, e)
+        for i, (fam, e) in enumerate(fams.items()):
+            cb = QCheckBox(fam)
+            cb.setChecked(e.id in pol.fonts or any(x.id in pol.fonts for x in ctl.fonts.fonts.values() if x.family == fam))
+            cb.toggled.connect(lambda _=False: self._save())
+            fg.addWidget(cb, i // 2, i % 2)
+            self.font_boxes[fam] = cb
+        self.lay.addLayout(fg)
+
+        self.section(tr("הגבלות", "Limits"))
+        f2 = QFormLayout()
+        self.max_keys = QSpinBox()
+        self.max_keys.setRange(1, 10)
+        self.max_keys.setValue(pol.max_keys)
+        self.max_keys.valueChanged.connect(lambda _: self._save())
+        f2.addRow(tr("מקסימום מקשים", "Max keys"), self.max_keys)
+        self.lay.addLayout(f2)
+        self.flag_boxes = {}
+        for key, label in (("keychain", tr("מחזיק מפתחות", "Keychain")), ("symbols_allowed", tr("סמלים", "Symbols")),
+                           ("svg_import", tr("ייבוא SVG", "SVG import")),
+                           ("per_key_colors", tr("צבע לכל מקש", "Per-key colours"))):
+            cb = QCheckBox(label)
+            cb.setChecked(getattr(pol, key))
+            cb.toggled.connect(lambda _=False: self._save())
+            self.add(cb)
+            self.flag_boxes[key] = cb
+        self.saved = self.hint("")
+        self.finish()
+        self._rebuild_colors()
+
+    # ---- colours ----------------------------------------------------------------------------
+    def _rebuild_colors(self) -> None:
+        from .widgets import ColorButton
+
+        while self.color_rows.count():
+            item = self.color_rows.takeAt(0)
+            w = item.widget() or (item.layout() and None)
+            if item.layout():
+                lay = item.layout()
+                while lay.count():
+                    x = lay.takeAt(0).widget()
+                    if x:
+                        x.setParent(None)
+                        x.deleteLater()
+            if w:
+                w.setParent(None)
+                w.deleteLater()
+        for i, c in enumerate(self.ctl.policy.colors):
+            h = QHBoxLayout()
+            name = QLineEdit(c.name)
+            name.editingFinished.connect(lambda i=i, w=name: self._color_name(i, w.text()))
+            btn = ColorButton(c.hex)
+            btn.picked.connect(lambda v, i=i: self._color_hex(i, v))
+            stock = QCheckBox(tr("במלאי", "In stock"))
+            stock.setChecked(c.in_stock)
+            stock.toggled.connect(lambda v, i=i: self._color_stock(i, v))
+            rm = QPushButton("✕")
+            rm.setFixedWidth(34)
+            rm.clicked.connect(lambda _=False, i=i: self._color_remove(i))
+            for w in (name, btn, stock, rm):
+                h.addWidget(w)
+            self.color_rows.addLayout(h)
+
+    def _add_color(self) -> None:
+        from ..config.customer_policy import FilamentColor
+
+        self.ctl.policy.colors.append(FilamentColor(tr("צבע חדש", "New colour"), "#9AA0A6"))
+        self._rebuild_colors()
+        self._save()
+
+    def _color_name(self, i: int, v: str) -> None:
+        self.ctl.policy.colors[i].name = v.strip() or self.ctl.policy.colors[i].name
+        self._save()
+
+    def _color_hex(self, i: int, v: str) -> None:
+        self.ctl.policy.colors[i].hex = v.upper()
+        self._save()
+
+    def _color_stock(self, i: int, v: bool) -> None:
+        self.ctl.policy.colors[i].in_stock = v
+        self._save()
+
+    def _color_remove(self, i: int) -> None:
+        del self.ctl.policy.colors[i]
+        self._rebuild_colors()
+        self._save()
+
+    # ---- persist ------------------------------------------------------------------------------
+    def _save(self) -> None:
+        pol = self.ctl.policy
+        pol.shop_name = self.shop_name.text().strip() or "PRINTYZ"
+        pol.shop_contact = self.shop_contact.text().strip()
+        pol.textures = [k for k, cb in self.tex_boxes.items() if cb.isChecked()] or ["smooth"]
+        pol.keycap_styles = [k for k, cb in self.style_boxes.items() if cb.isChecked()] or ["standard"]
+        pol.layouts = [k for k, cb in self.layout_boxes.items() if cb.isChecked()] or ["row"]
+        pol.legend_modes = [k for k, cb in self.mode_boxes.items() if cb.isChecked()] or ["flush"]
+        fams = {f for f, cb in self.font_boxes.items() if cb.isChecked()}
+        pol.fonts = [e.id for e in self.ctl.fonts.customer_fonts() if e.family in fams]
+        pol.max_keys = self.max_keys.value()
+        for k, cb in self.flag_boxes.items():
+            setattr(pol, k, cb.isChecked())
+        stock = pol.stock_colors()
+        if stock:
+            hexes = [c.hex for c in stock]
+            pol.default_body = pol.default_body if pol.default_body in hexes else hexes[0]
+            pol.default_cap = pol.default_cap if pol.default_cap in hexes else hexes[min(1, len(hexes) - 1)]
+            pol.default_legend = pol.default_legend if pol.default_legend in hexes else hexes[-1]
+        pol.save(self.file)
+        self.saved.setText(tr(f"נשמר: {self.file}", f"Saved: {self.file}"))
+        self.ctl.changed.emit()

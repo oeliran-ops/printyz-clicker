@@ -168,3 +168,37 @@ def test_export_save_as_name_and_no_silent_overwrite(app, tmp_path, monkeypatch)
     w.export_ask_folder()
     assert sorted(p.name for p in target.iterdir()) == ["Dana gift", "Dana gift_2"]
     w.close()
+
+
+def test_customer_policy_and_order_roundtrip(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    from printyz_clicker.export.order import read_order
+
+    set_language("he")
+    w = MainWindow()
+    w.ctl.wait_idle()
+    w.mode.setCurrentIndex(1)                                   # developer previews customer mode
+    app.processEvents()
+    pol = w.ctl.policy
+    assert pol.color_allowed(w.ctl.project.colors.body) and pol.color_allowed(w.ctl.project.colors.cap)
+    hidden = {w.nav.item(i).text() for i in range(w.nav.count()) if w.nav.item(i).isHidden()}
+    assert "ייצוא" in hidden and "מכאני" in hidden and "הזמנה" not in hidden
+    assert w.colors_page.body.restrict is not None              # inventory-only picker
+    # a colour outside the stock list is a violation and blocks the order
+    w.ctl.project.colors.cap = "#123456"
+    assert w.ctl.policy_violations()
+    w.ctl.project.colors.cap = pol.default_cap
+    w.ctl.touch()
+    w.ctl.wait_idle()
+    w.order_page.c_name.setText("Dana")
+    w.order_page.c_phone.setText("050")
+    target = tmp_path / "dana.printyz-order"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(target), ""))
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: 0)
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: (_ for _ in ()).throw(AssertionError(a[2])))
+    w.save_order()
+    proj, summary = read_order(target)
+    assert proj.text == w.ctl.project.text and summary["customer"]["name"] == "Dana"
+    assert not pol.violations(proj)
+    w.close()

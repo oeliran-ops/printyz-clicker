@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -36,6 +37,20 @@ def main() -> int:
     win = MainWindow(on_language=_switch_language)
     win.show()
     app._win = win
+    shot = os.environ.get("PRINTYZ_SMOKE_SHOT")
+    if shot:                                   # automated check of a packaged build: render, screenshot, quit
+        def done(*_):
+            from PySide6.QtCore import QTimer
+
+            def snap():
+                win.grab().save(shot)
+                ok = win.ctl.result is not None and win.ctl.result.ok
+                print(f"SMOKE edition={win.ctl.policy and ('customer' if win.ctl.customer_edition else 'developer')} "
+                      f"build_ok={ok} parts={len(win.ctl.result.parts) if win.ctl.result else 0}", flush=True)
+                app.quit()
+            QTimer.singleShot(1500, snap)
+        win.ctl.built.connect(done)
+        win.ctl.build_failed.connect(lambda msg: (print("SMOKE build_failed", msg, flush=True), app.quit()))
     return app.exec()
 
 

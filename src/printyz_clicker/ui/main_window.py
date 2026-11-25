@@ -20,7 +20,7 @@ from .i18n import is_rtl, language, tr
 from .icons import icon
 from .pages import (
     BodyPage, ColorsPage, ExportPage, FontPage, KeycapPage, KeychainPage, LetteringPage, MechanicalPage,
-    NamePage, SymbolsPage,
+    NamePage, SymbolsPage, OrderPage, CustomerSettingsPage,
 )
 from .viewer import Viewer3D
 from .widgets import Page, Segmented
@@ -91,10 +91,16 @@ class MainWindow(QMainWindow):
         from ..geometry.symbols import SymbolLibrary
 
         self._add_page("symbol", tr("סמלים", "Symbols"), SymbolsPage(self.ctl, SymbolLibrary(data_dir() / "symbols.json")))
-        self._add_page("keychain", tr("מחזיק", "Keychain"), KeychainPage(self.ctl))
+        self._add_page("keychain", tr("מחזיק", "Keychain"), KeychainPage(self.ctl), dev_only="keychain")
         self._add_page("mech", tr("מכאני", "Fit"), MechanicalPage(self.ctl), dev_only=True)
         self.export_page = ExportPage(self.ctl, self.export, data_dir() / "print_settings.json")
-        self._add_page("export", tr("ייצוא", "Export"), self.export_page)
+        self._add_page("export", tr("ייצוא", "Export"), self.export_page, dev_only=True)
+        from ..edition import policy_path
+
+        self._add_page("mech", tr("הגדרות לקוח", "Customer"), CustomerSettingsPage(self.ctl, policy_path()),
+                       dev_only=True)
+        self.order_page = OrderPage(self.ctl, self.save_order)
+        self._add_page("export", tr("הזמנה", "Order"), self.order_page, dev_only="customer")
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.setCurrentRow(0)
 
@@ -166,6 +172,11 @@ class MainWindow(QMainWindow):
         self.mode.addItem(tr("מצב לקוח", "Customer mode"), False)
         self.mode.currentIndexChanged.connect(self._mode_changed)
         lay.addWidget(self.mode)
+        if self.ctl.customer_edition:
+            self.mode.blockSignals(True)             # pages do not exist yet; _apply_mode runs later
+            self.mode.setCurrentIndex(1)
+            self.mode.blockSignals(False)
+            self.mode.hide()                         # the customer edition can never switch modes
         lang = QPushButton("English" if is_rtl() else "עברית")
         lang.clicked.connect(lambda: self.on_language and self.on_language("en" if is_rtl() else "he", self))
         lay.addWidget(lang)
@@ -180,7 +191,8 @@ class MainWindow(QMainWindow):
         dl = QPushButton(icon("export", "#FFFFFF"), tr("  הורדת קבצי הדפסה  \u2066(3MF)\u2069", "  Download 3MF"))
         dl.setObjectName("Primary")
         dl.setMinimumHeight(42)
-        dl.clicked.connect(self.export_ask_folder)
+        dl.clicked.connect(lambda: self.save_order() if self.ctl.restricted else self.export_ask_folder())
+        self.primary_btn = dl
         v.addWidget(dl)
         hist = QHBoxLayout()
         self.undo_btn = QPushButton("↶ " + tr("בטל", "Undo"))
@@ -283,12 +295,26 @@ class MainWindow(QMainWindow):
 
     def _apply_mode(self) -> None:
         dev = self.ctl.developer_mode
-        for row, (_, page, dev_only) in enumerate(self.pages):
-            self.nav.item(row).setHidden(dev_only and not dev)
+        if not dev:
+            self.ctl.apply_policy_defaults()
+        for row, (_, page, rule) in enumerate(self.pages):
+            if rule == "customer":
+                hidden = dev
+            elif rule == "keychain":
+                hidden = not dev and not self.ctl.policy.keychain
+            else:
+                hidden = bool(rule) and not dev
+            self.nav.item(row).setHidden(hidden)
             if hasattr(page, "refresh"):
                 page.refresh()
         if self.nav.currentItem() and self.nav.currentItem().isHidden():
             self.nav.setCurrentRow(0)
+        if hasattr(self, "primary_btn"):
+            self.primary_btn.setText(tr("  שמירת הזמנה לשליחה", "  Save order") if not dev
+                                     else tr("  הורדת קבצי הדפסה  \u2066(3MF)\u2069", "  Download 3MF"))
+        if not dev and self.ctl.project.keychain.enabled and not self.ctl.policy.keychain:
+            self.ctl.project.keychain.enabled = False
+        self.ctl.touch(record=False)
 
     def _set_exploded(self, v: str) -> None:
         self.viewer.exploded = v == "exploded"
@@ -347,16 +373,22 @@ class MainWindow(QMainWindow):
         self.status.showMessage(tr(f"נשמר: {path}", f"Saved: {path}"), 4000)
 
     def open(self) -> None:
-        fn, _ = QFileDialog.getOpenFileName(self, tr("פתיחת פרויקט", "Open project"), "",
-                                            "PRINTYZ (*.printyz.json *.json)")
+        fn, _ = QFileDialog.getOpenFileName(self, tr("פתיחת פרויקט או הזמנה", "Open project or order"), "",
+                                            "PRINTYZ (*.printyz.json *.json *.printyz-order)")
         if not fn:
             return
+        summary = None
         try:
-            proj = Project.load(fn)
+            if fn.endswith(".printyz-order"):
+                from ..export.order import read_order
+
+                proj, summary = read_order(Path(fn))
+            else:
+                proj = Project.load(fn)
         except Exception as e:  # noqa: BLE001
             QMessageBox.warning(self, "PRINTYZ", str(e))
             return
-        self.project_path = Path(fn)
+        self.project_path = None if summary is not None else Path(fn)
         self.proj_name.setText(proj.name)
         self.ctl.replace_project(proj)
         for _, page, _ in self.pages:
@@ -364,6 +396,52 @@ class MainWindow(QMainWindow):
                 page.ctl = self.ctl
             if hasattr(page, "refresh"):
                 page.refresh()
+        if summary is not None:
+            cust = summary.get("customer", {})
+            issues = self.ctl.policy.violations(proj)
+            msg = tr(f"הזמנה מ: {cust.get('name', '?')}  ·  {cust.get('contact', '')}\n"
+                     f"הערות: {cust.get('notes', '') or '—'}\n\n",
+                     f"Order from: {cust.get('name', '?')} · {cust.get('contact', '')}\nNotes: {cust.get('notes', '')}\n\n")
+            msg += (tr("⚠ לא תואם להגדרות הלקוח:\n", "⚠ Does not match the customer policy:\n") + "\n".join(issues)
+                    if issues else tr("✓ ההזמנה תואמת להגדרות הלקוח.", "✓ Order matches the customer policy."))
+            QMessageBox.information(self, "PRINTYZ", msg)
+
+    def save_order(self) -> None:
+        """Customer: save the design as an order file to send to the shop (no print files)."""
+        from ..export.order import ORDER_EXT, write_order
+        from ..export.exporter import safe_name
+
+        self.ctl.wait_idle()
+        res = self.ctl.result
+        problems = self.ctl.policy_violations() + ([] if res is not None and res.ok else
+                                                    (res.errors if res is not None else ["no model"]))
+        if problems:
+            QMessageBox.warning(self, "PRINTYZ", tr("יש לתקן לפני השמירה:\n", "Please fix first:\n") + "\n".join(problems))
+            return
+        cust = self.order_page.customer()
+        if not cust["name"] or not cust["contact"]:
+            row = next(i for i, (_, p, _) in enumerate(self.pages) if p is self.order_page)
+            self.nav.setCurrentRow(row)
+            QMessageBox.information(self, "PRINTYZ", tr("נא למלא שם ופרטי קשר בעמוד \"הזמנה\".",
+                                                        "Please fill in your name and contact on the Order page."))
+            return
+        start = Path(self.export_page.folder.text())
+        start.mkdir(parents=True, exist_ok=True)
+        fn, _ = QFileDialog.getSaveFileName(self, tr("שמירת קובץ הזמנה", "Save order file"),
+                                            str(start / f"{safe_name(self.ctl.project.text or 'order')}{ORDER_EXT}"),
+                                            f"PRINTYZ order (*{ORDER_EXT})")
+        if not fn:
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            out = write_order(Path(fn), self.ctl.project, res, self.ctl.policy, cust)
+        finally:
+            QApplication.restoreOverrideCursor()
+        self.export_page.set_folder(str(out.parent))
+        pol = self.ctl.policy
+        QMessageBox.information(self, "PRINTYZ", tr(
+            f"ההזמנה נשמרה:\n{out}\n\nשלח את הקובץ ל{pol.shop_name}" + (f" ({pol.shop_contact})" if pol.shop_contact else ""),
+            f"Order saved:\n{out}\n\nSend the file to {pol.shop_name}"))
 
     def export_ask_folder(self) -> None:
         """Main download button: "Save as" - the user picks the folder AND the name.

@@ -61,3 +61,11 @@ UI: ui/main_window.py ← ui/controller.py (בנייה ברקע, debounce) ← u
 ## ביצועים
 מטמון גיאומטריה ב־`geometry/builder.py`: גוף, טקסטורה, כל מקש ומיקומו נשמרים לפי המפתח שמשפיע עליהם.
 שינוי צבע ≈ 0.02 ש׳ · שינוי אות ≈ 1.5 ש׳ · שינוי טקסטורה ≈ 1 ש׳ (מדידה בענן, 7 מקשים).
+
+## גרסת לקוח
+- `edition.json` ליד התוכנה (`{"edition": "customer"}`) ← אין מצב מפתח, אין ייצוא קבצי הדפסה.
+- `customer/customer_policy.json` — מה מותר ללקוח (צבעי מלאי, גופנים, טקסטורות, כובעים, פריסות, סגנונות כיתוב,
+  מקסימום מקשים, מחזיק, סמלים/SVG, צבע לכל מקש, פרטי החנות). נערך בעמוד "הגדרות לקוח" בגרסת המפתח.
+- הלקוח שומר קובץ הזמנה `*.printyz-order` (פרויקט + תמונות + סיכום); המפתח פותח אותו ב"פתח" ומקבל בדיקת התאמה.
+- בנייה: `Build customer installer.bat` → PyInstaller (`customer/printyz_customer.spec`) + בדיקת עשן אוטומטית
+  + Inno Setup (`customer/installer.iss`) → `customer/output/PRINTYZ-Clicker-Setup-*.exe`.
