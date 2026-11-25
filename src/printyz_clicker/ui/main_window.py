@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 from PySide6.QtCore import QSize, QStandardPaths, Qt
@@ -369,18 +366,44 @@ class MainWindow(QMainWindow):
                 page.refresh()
 
     def export_ask_folder(self) -> None:
-        """Main download button: let the user choose where to save (starts at the last folder used)."""
-        start = self.export_page.folder.text()
-        Path(start).mkdir(parents=True, exist_ok=True)
-        d = QFileDialog.getExistingDirectory(self, tr("בחר היכן לשמור את קבצי ההדפסה", "Choose where to save the print files"),
-                                             start)
-        if not d:
-            return                                           # cancelled: nothing is written
-        self.export_page.set_folder(d)
-        self.export(Path(d), tuple(k for k, cb in self.export_page.fmt.items() if cb.isChecked()),
-                    self.export_page.previews.isChecked())
+        """Main download button: "Save as" - the user picks the folder AND the name.
+        An existing export is never replaced without asking."""
+        from ..export.exporter import safe_name, unique_name
 
-    def export(self, folder: Path, formats: tuple[str, ...], previews: bool) -> None:
+        start = Path(self.export_page.folder.text())
+        start.mkdir(parents=True, exist_ok=True)
+        suggested = start / unique_name(start, self.ctl.project.name or "PRINTYZ")
+        fn, _ = QFileDialog.getSaveFileName(
+            self, tr("שמירת קבצי ההדפסה — בחר מיקום ושם", "Save print files - choose folder and name"),
+            str(suggested), tr("תיקיית ייצוא PRINTYZ (*)", "PRINTYZ export folder (*)"),
+            options=QFileDialog.DontConfirmOverwrite)
+        if not fn:
+            return                                           # cancelled: nothing is written
+        target = Path(fn)
+        root, name = target.parent, safe_name(target.stem if target.suffix.lower() == ".3mf" else target.name)
+        overwrite = False
+        if (root / name).exists():
+            box = QMessageBox(self)
+            box.setWindowTitle("PRINTYZ")
+            box.setText(tr(f"כבר קיים ייצוא בשם \"{name}\" בתיקייה הזו.", f"An export named \"{name}\" already exists here."))
+            new_name = unique_name(root, name)
+            keep = box.addButton(tr(f"שמור בשם חדש ({new_name})", f"Save as new ({new_name})"), QMessageBox.AcceptRole)
+            repl = box.addButton(tr("החלף את הקיים", "Replace it"), QMessageBox.DestructiveRole)
+            box.addButton(tr("ביטול", "Cancel"), QMessageBox.RejectRole)
+            box.setDefaultButton(keep)
+            box.exec()
+            if box.clickedButton() is repl:
+                overwrite = True
+            elif box.clickedButton() is keep:
+                name = new_name
+            else:
+                return
+        self.export_page.set_folder(str(root))
+        self.export(root, tuple(k for k, cb in self.export_page.fmt.items() if cb.isChecked()),
+                    self.export_page.previews.isChecked(), name=name, overwrite=overwrite)
+
+    def export(self, folder: Path, formats: tuple[str, ...], previews: bool, name: str | None = None,
+               overwrite: bool = False) -> None:
         self.ctl.wait_idle()
         res = self.ctl.result
         if res is None or not res.ok:
@@ -389,7 +412,7 @@ class MainWindow(QMainWindow):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             rep = validate(res)  # full check incl. watertight meshes before writing files
-            out = export_all(res, rep, folder, formats, self.export_page.settings)
+            out = export_all(res, rep, folder, formats, self.export_page.settings, name=name, overwrite=overwrite)
             if previews:
                 from ..render.preview import render_set
                 render_set(res, out / "Exports" / "Preview")
@@ -405,8 +428,7 @@ class MainWindow(QMainWindow):
         box.addButton(tr("סגור", "Close"), QMessageBox.RejectRole)
         box.exec()
         if box.clickedButton() is openb:
-            exp = out / "Exports"
-            if sys.platform.startswith("win"):
-                os.startfile(exp)  # type: ignore[attr-defined]
-            else:
-                subprocess.Popen(["xdg-open", str(exp)])
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(out / "Exports")))   # never raises

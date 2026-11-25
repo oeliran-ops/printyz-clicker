@@ -31,13 +31,33 @@ def filament_map(res: BuildResult) -> dict[str, int]:
     return order
 
 
+def unique_name(root: Path, name: str) -> str:
+    """`name` if root/name does not exist yet, else name_2, name_3 ... (never overwrite by accident)."""
+    base = safe_name(name)
+    if not (Path(root) / base).exists():
+        return base
+    i = 2
+    while (Path(root) / f"{base}_{i}").exists():
+        i += 1
+    return f"{base}_{i}"
+
+
 def export_all(res: BuildResult, report: ValidationReport, root: Path,
-               formats: tuple[str, ...] = ("stl", "step", "3mf"), settings: dict | None = None) -> Path:
+               formats: tuple[str, ...] = ("stl", "step", "3mf"), settings: dict | None = None,
+               name: str | None = None, overwrite: bool = False) -> Path:
+    """Write the export bundle to root/<name>/. Unless overwrite=True an existing folder is never
+    replaced: a free name (name_2, name_3 ...) is used instead."""
     proj = res.project
-    folder = Path(root) / safe_name(proj.name)
+    base = safe_name(name or proj.name)
+    if not overwrite:
+        base = unique_name(Path(root), base)
+    folder = Path(root) / base
+    if overwrite and folder.exists():
+        import shutil
+
+        shutil.rmtree(folder / "Exports", ignore_errors=True)     # no stale files from the old export
     exp = folder / "Exports"
     exp.mkdir(parents=True, exist_ok=True)
-    base = safe_name(proj.name)
     proj.save(folder / f"{base}.printyz.json")
     (exp / "validation_report.md").write_text(report.to_markdown(), "utf-8")
     (exp / "validation_report.json").write_text(report.to_json(), "utf-8")

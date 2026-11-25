@@ -254,3 +254,13 @@ def test_legends_centred_on_keycaps_all_fonts():
             for leg in (x for x in res.parts if x.role == "legend" and x.key_id == pk.key_id):
                 c = leg.solid.bounding_box().center()
                 assert abs(c.X - pk.x) < 0.01 and abs(c.Y - pk.y) < 0.01, fid
+
+
+def test_export_never_overwrites_by_default(tmp_path):
+    from printyz_clicker.export.exporter import export_all
+
+    res = build_project(make("Hi"), include_switches=False)
+    a = export_all(res, validate(res), tmp_path, ("3mf",))
+    b = export_all(res, validate(res), tmp_path, ("3mf",))
+    c = export_all(res, validate(res), tmp_path, ("3mf",), name="t", overwrite=True)
+    assert a.name == "t" and b.name == "t_2" and c == a

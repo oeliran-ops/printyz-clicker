@@ -136,27 +136,35 @@ def test_symbol_apply_any_order_and_customer_library(app, tmp_path):
     w.close()
 
 
-def test_export_asks_for_folder_and_remembers_it(app, tmp_path, monkeypatch):
+def test_export_save_as_name_and_no_silent_overwrite(app, tmp_path, monkeypatch):
+    from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QFileDialog, QMessageBox
 
     set_language("he")
     w = MainWindow()
     w.ctl.wait_idle()
-    target = tmp_path / "my_choice"
-    target.mkdir()
-    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(target))
-    monkeypatch.setattr(QMessageBox, "exec", lambda self: 0)
     w.export_page.fmt["step"].setChecked(False)
     w.export_page.previews.setChecked(False)
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: 0)
+    target = tmp_path / "orders"
+    target.mkdir()
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(target / "Dana gift"), ""))
     w.export_ask_folder()
-    assert list(target.glob("*/Exports/*_print.3mf"))                 # written where the user chose
-    assert w.export_page.folder.text() == str(target)
-    from PySide6.QtCore import QSettings
+    first = target / "Dana gift" / "Exports"
+    assert list(first.glob("*_bambu.3mf"))                                # saved under the chosen name
     assert QSettings("PRINTYZ", "Clicker Studio").value("export_folder") == str(target)
-    # cancelling the dialog writes nothing
-    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: "")
-    other = tmp_path / "untouched"
-    w.export_page.set_folder(str(other))
+    stamp = next(first.glob("*_print.3mf")).stat().st_mtime_ns
+    # same name again: the dialog asks; choosing "save as new" keeps the old export untouched
+    def choose_keep(self):
+        self.setProperty("_x", 1)
+        self.clickedButton = lambda: self.buttons()[0]
+        return 0
+    monkeypatch.setattr(QMessageBox, "exec", choose_keep)
     w.export_ask_folder()
-    assert not other.exists() or not list(other.glob("*/Exports"))
+    assert next(first.glob("*_print.3mf")).stat().st_mtime_ns == stamp    # old files not replaced
+    assert list((target / "Dana gift_2" / "Exports").glob("*_print.3mf"))
+    # cancelling writes nothing
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: ("", ""))
+    w.export_ask_folder()
+    assert sorted(p.name for p in target.iterdir()) == ["Dana gift", "Dana gift_2"]
     w.close()
