@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QFont, QFontDatabase, QIcon
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+    QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget,
 )
 
@@ -1144,19 +1144,52 @@ class SymbolsPage(Page):
 
         self.ctl = ctl
         self.library = library or SymbolLibrary()
-        self.edit_lib = QCheckBox(tr("עריכת ספריית הלקוח: לחיצה על סמל מסתירה / מציגה אותו ללקוח",
-                                     "Edit customer library: click a symbol to hide / show it"))
+        self.edit_lib = QCheckBox(tr("עריכת ספריית הלקוח", "Edit customer library"))
+        self.edit_lib.setToolTip(tr("כשמסומן: לחיצה על סמל מסתירה / מציגה אותו ללקוח",
+                                    "When on: clicking a symbol hides / shows it for customers"))
         self.edit_lib.toggled.connect(lambda _: self._rebuild_grid())
         self.add(self.edit_lib)
         self.picked: tuple[str, str] | None = None      # (kind, value)
         self.hint(tr("1. בחר סמל  2. בחר מקש למטה (או בלי מקש)  3. לחץ על פעולה.",
                      "1. Pick a symbol  2. pick a key below (optional)  3. choose an action."))
-        self.grid = QGridLayout()
-        self.grid.setSpacing(6)
-        self.buttons: dict[str, QPushButton] = {}
+        bar = QHBoxLayout()
+        self.toggle_btn = QPushButton()
+        self.toggle_btn.setCheckable(True)
+        self.toggle_btn.setChecked(True)
+        self.toggle_btn.toggled.connect(self._set_expanded)
+        self.smaller = QPushButton("−")
+        self.bigger = QPushButton("+")
+        for b in (self.smaller, self.bigger):
+            b.setFixedWidth(36)
+        self.smaller.setToolTip(tr("סמלים קטנים יותר", "Smaller icons"))
+        self.bigger.setToolTip(tr("סמלים גדולים יותר", "Bigger icons"))
+        self.smaller.clicked.connect(lambda: self._zoom(-8))
+        self.bigger.clicked.connect(lambda: self._zoom(8))
+        bar.addWidget(self.toggle_btn, 1)
+        bar.addWidget(self.smaller)
+        bar.addWidget(self.bigger)
+        self.lay.addLayout(bar)
+        # icons flow into as many columns as the panel width allows - never cut off
+        self.sym_list = QListWidget()
+        self.sym_list.setViewMode(QListWidget.IconMode)
+        self.sym_list.setResizeMode(QListWidget.Adjust)
+        self.sym_list.setMovement(QListWidget.Static)
+        self.sym_list.setWrapping(True)
+        self.sym_list.setUniformItemSizes(True)
+        self.sym_list.setSpacing(3)
+        self.sym_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.sym_list.setStyleSheet(
+            "QListWidget { border: none; background: transparent; }"
+            "QListWidget::item { border: 1px solid #E2E5EA; border-radius: 8px; background: white; }"
+            "QListWidget::item:hover { background: #EEF2FB; }"
+            "QListWidget::item:selected { border: 2px solid #2F6FED; background: #E3ECFD; }")
+        self.sym_list.itemClicked.connect(self._item_clicked)
+        self.sym_list.viewport().installEventFilter(self)
+        self.lay.addWidget(self.sym_list)
+        self.icon_px = 40
+        self.buttons: dict[str, object] = {}     # sid -> list item
         self._icons_built = False
         self._symbols = SYMBOLS
-        self.lay.addLayout(self.grid)
         imp = QPushButton(tr("ייבוא קובץ SVG…", "Import SVG file…"))
         imp.clicked.connect(self._import_svg)
         self.add(imp)
@@ -1194,38 +1227,82 @@ class SymbolsPage(Page):
         super().showEvent(e)
 
     def _rebuild_grid(self) -> None:
+        from PySide6.QtWidgets import QListWidgetItem
+
         from ..geometry.symbols import sketch_to_svg, symbol_sketch
 
-        while self.grid.count():
-            w = self.grid.takeAt(0).widget()
-            if w:
-                w.setParent(None)
-                w.deleteLater()
+        self.sym_list.clear()
         self.buttons.clear()
         dev = self.ctl.developer_mode
         editing = dev and self.edit_lib.isChecked()
-        i = 0
+        px = self.icon_px
+        self.sym_list.setIconSize(QSize(px, px))
+        self.sym_list.setGridSize(QSize(px + 18, px + 18))
         for sid, (he, en, _) in self._symbols.items():
             shown = self.library.visible(sid)
             if not shown and not dev:
                 continue                          # customers only see approved symbols
-            b = QPushButton()
-            b.setCheckable(True)
-            b.setFixedSize(58, 58)
-            b.setIconSize(QSize(40, 40))
             color = "#2B2F36" if shown else "#C3C8D0"
-            b.setIcon(QIcon(svg_pixmap(sketch_to_svg(symbol_sketch(sid), color))))
-            tip = tr(he, en) + ("" if shown else tr("  (מוסתר מהלקוח)", "  (hidden from customers)"))
-            b.setToolTip(tip)
-            if editing:
-                b.setStyleSheet("QPushButton { border: 1px dashed #9AA3B2; }")
-                b.clicked.connect(lambda _=False, s=sid: self._toggle_visible(s))
-            else:
-                b.clicked.connect(lambda _=False, s=sid: self._pick(("symbol", s)))
-                b.setChecked(self.picked == ("symbol", sid))
-            self.grid.addWidget(b, i // 5, i % 5)
-            self.buttons[sid] = b
-            i += 1
+            it = QListWidgetItem(QIcon(svg_pixmap(sketch_to_svg(symbol_sketch(sid), color), px)), "")
+            it.setData(Qt.UserRole, sid)
+            it.setSizeHint(QSize(px + 14, px + 14))
+            it.setToolTip(tr(he, en) + ("" if shown else tr("  (מוסתר מהלקוח)", "  (hidden from customers)"))
+                          + (tr("  · לחיצה = הצג/הסתר", "  · click = show/hide") if editing else ""))
+            self.sym_list.addItem(it)
+            self.buttons[sid] = it
+            if not editing and self.picked == ("symbol", sid):
+                it.setSelected(True)
+        self._update_toggle()
+        self._fit_height()
+
+    def click_symbol(self, sid: str) -> None:
+        """Same as a user click on a symbol (used by tests)."""
+        self._item_clicked(self.buttons[sid])
+
+    def _item_clicked(self, it) -> None:
+        sid = it.data(Qt.UserRole)
+        if self.ctl.developer_mode and self.edit_lib.isChecked():
+            self._toggle_visible(sid)
+        else:
+            self._pick(("symbol", sid))
+
+    def _zoom(self, d: int) -> None:
+        self.icon_px = min(72, max(24, self.icon_px + d))
+        self.smaller.setEnabled(self.icon_px > 24)
+        self.bigger.setEnabled(self.icon_px < 72)
+        self._rebuild_grid()
+
+    def _set_expanded(self, on: bool) -> None:
+        self.sym_list.setVisible(on)
+        self.smaller.setVisible(on)
+        self.bigger.setVisible(on)
+        self._update_toggle()
+        self._fit_height()
+
+    def _update_toggle(self) -> None:
+        n = self.sym_list.count()
+        arrow = "▾" if self.toggle_btn.isChecked() else ("◂" if is_rtl() else "▸")
+        self.toggle_btn.setText(f"{arrow}  " + (tr(f"סמלים ({n}) — לחץ לצמצום", f"Symbols ({n}) - click to collapse")
+                                                 if self.toggle_btn.isChecked()
+                                                 else tr(f"סמלים ({n}) — לחץ להרחבה", f"Symbols ({n}) - click to expand")))
+
+    def _fit_height(self) -> None:
+        """Show every symbol: height follows how many rows the current width needs."""
+        if not self.sym_list.isVisible() and not self.toggle_btn.isChecked():
+            return
+        cell = self.icon_px + 18 + 3
+        width = max(cell, self.sym_list.viewport().width())
+        cols = max(1, width // cell)
+        rows = -(-self.sym_list.count() // cols)
+        self.sym_list.setFixedHeight(rows * cell + 8)
+
+    def eventFilter(self, obj, ev):  # noqa: N802 - Qt API
+        from PySide6.QtCore import QEvent
+
+        lst = getattr(self, "sym_list", None)          # QScrollArea sends events before __init__ ends
+        if lst is not None and obj is lst.viewport() and ev.type() == QEvent.Resize:
+            self._fit_height()
+        return super().eventFilter(obj, ev)
 
     def _toggle_visible(self, sid: str) -> None:
         self.library.set_visible(sid, not self.library.visible(sid))
@@ -1233,8 +1310,8 @@ class SymbolsPage(Page):
 
     def _pick(self, what: tuple[str, str]) -> None:
         self.picked = what
-        for sid, b in self.buttons.items():
-            b.setChecked(what == ("symbol", sid))
+        for sid, it in self.buttons.items():
+            it.setSelected(what == ("symbol", sid))
         self.refresh()
 
     def _import_svg(self) -> None:

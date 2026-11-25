@@ -81,7 +81,7 @@ class MainWindow(QMainWindow):
         self.nav.setWordWrap(True)
         self.nav.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.stack = QStackedWidget()
-        self.stack.setFixedWidth(400)
+        self.stack.setMinimumWidth(340)
         self.stack.setObjectName("SidePanel")
         self.pages: list[tuple[str, QWidget, bool]] = []
         self._add_page("name", tr("שם ופריסה", "Name"), NamePage(self.ctl))
@@ -107,10 +107,21 @@ class MainWindow(QMainWindow):
         side_l.setSpacing(0)
         side_l.addWidget(self.stack, 1)
         side_l.addWidget(self._action_bar())
-        side.setFixedWidth(400)
+        side.setMinimumWidth(340)
         body.addWidget(self.nav)
-        body.addWidget(side)
-        body.addWidget(self._viewer_area(), 1)
+        # the settings panel can be widened / narrowed by dragging the divider
+        from PySide6.QtWidgets import QSplitter
+
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.setHandleWidth(6)
+        self.splitter.setStyleSheet("QSplitter::handle { background: #E2E5EA; } QSplitter::handle:hover { background: #2F6FED; }")
+        self.splitter.addWidget(side)
+        self.splitter.addWidget(self._viewer_area())
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([430, 1000])
+        body.addWidget(self.splitter, 1)
 
         self.status = QStatusBar()
         self.setStatusBar(self.status)

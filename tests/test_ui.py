@@ -121,7 +121,7 @@ def test_symbol_apply_any_order_and_customer_library(app, tmp_path):
     w.nav.setCurrentRow(next(i for i, (_, p, _) in enumerate(w.pages) if p is sp))
     app.processEvents()
     key = w.ctl.project.keys[0]
-    sp.buttons["crown_queen"].click()          # symbol first ...
+    sp.click_symbol("crown_queen")             # symbol first ...
     sp.strip._pick(key.id)                     # ... then the key
     assert sp.apply_btn.isEnabled()
     sp.apply_btn.click()
