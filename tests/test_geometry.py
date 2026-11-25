@@ -333,3 +333,24 @@ def test_bambu_names_have_no_forbidden_characters(tmp_path):
     names = re.findall(r'key="(?:name|plater_name)" value="([^"]*)"', cfg)
     names += re.findall(r'<metadata name="Title">([^<]*)<', model)
     assert names and all(not set(n) & set('<>:/\\|?*"') and "&quot;" not in n for n in names), names
+
+
+@pytest.mark.parametrize("plates", [1, 2])
+def test_bambu_plate_choice(tmp_path, plates):
+    import re
+    import zipfile
+
+    from printyz_clicker.export.exporter import export_all
+
+    p = make("abcd")
+    p.keychain.enabled = True
+    res = build_project(p, include_switches=False)
+    out = export_all(res, validate(res), tmp_path, ("3mf",), plates=plates)
+    with zipfile.ZipFile(out / "Exports" / "t_bambu.3mf") as z:
+        cfg = z.read("Metadata/model_settings.config").decode()
+        model = z.read("3D/3dmodel.model").decode()
+    counts = [c.count("<model_instance>") for c in cfg.split("<plate>")[1:]]
+    assert counts == ([5] if plates == 1 else [1, 4])
+    if plates == 1:                                   # everything inside the 256 mm bed of plate 1
+        xy = [tuple(map(float, t.split()[9:11])) for t in re.findall(r'transform="([^"]+)" printable', model)]
+        assert all(10 < x < 246 and 10 < y < 246 for x, y in xy)

@@ -412,7 +412,8 @@ class MainWindow(QMainWindow):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             rep = validate(res)  # full check incl. watertight meshes before writing files
-            out = export_all(res, rep, folder, formats, self.export_page.settings, name=name, overwrite=overwrite)
+            out = export_all(res, rep, folder, formats, self.export_page.settings, name=name, overwrite=overwrite,
+                             plates=self.export_page.plate_count())
             if previews:
                 from ..render.preview import render_set
                 render_set(res, out / "Exports" / "Preview")

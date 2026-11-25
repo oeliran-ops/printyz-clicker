@@ -44,7 +44,7 @@ def unique_name(root: Path, name: str) -> str:
 
 def export_all(res: BuildResult, report: ValidationReport, root: Path,
                formats: tuple[str, ...] = ("stl", "step", "3mf"), settings: dict | None = None,
-               name: str | None = None, overwrite: bool = False) -> Path:
+               name: str | None = None, overwrite: bool = False, plates: int = 2) -> Path:
     """Write the export bundle to root/<name>/. Unless overwrite=True an existing folder is never
     replaced: a free name (name_2, name_3 ...) is used instead."""
     proj = res.project
@@ -87,22 +87,35 @@ def export_all(res: BuildResult, report: ValidationReport, root: Path,
             obj = objects.setdefault(p.group, Object3MF(f"{base}_{p.group}", []))
             obj.volumes.append(Volume(p.name, meshes[p.name], fmap[p.color.upper()], p.color))
         write_3mf(exp / f"{base}_print.3mf", list(objects.values()), list(fmap.keys()), title=proj.name)
-        # Bambu Studio project: plate 1 = body, plate 2 = keycaps, per-object print settings
+        # Bambu Studio project, per-object print settings. Plates: the user's choice
+        #   2 plates (default): plate 1 = body, plate 2 = keycaps
+        #   1 plate           : body at the back, keycaps in rows in front, all on plate 1
         bobjs: list[BObject] = []
         cap_groups = [g for g in objects if g != "body"]
         cols = max(1, min(5, len(cap_groups)))
+        rows = (len(cap_groups) + cols - 1) // cols
         pitch = res.style.bottom_width + 8.0
-        cxp, cyp = print_profile.BED_SIZE[0] / 2, print_profile.BED_SIZE[1] / 2
+        bed_w, bed_h = print_profile.BED_SIZE
+        cxp, cyp = bed_w / 2, bed_h / 2
+        bx0, by0, bx1, by1 = res.body.outline_bbox
+        body_h = (by1 - by0) + (2 * proj.keychain.length if proj.keychain.enabled else 0)
+        caps_h = rows * pitch
+        gap = 12.0
+        one_plate = plates == 1 and (body_h + gap + caps_h) <= bed_h - 16 and max(bx1 - bx0, cols * pitch) <= bed_w - 16
+        if plates == 1 and not one_plate:
+            report.add("plates / פלטות", "warning", "the model does not fit on one plate - exported on two plates")
+        total = body_h + gap + caps_h
         for g, obj in objects.items():
             parts = [BPart(v.name, v.mesh, v.extruder) for v in obj.volumes]
             if g == "body":
-                bobjs.append(BObject(obj.name, parts, 1, cxp, cyp))
+                y = cyp + total / 2 - body_h / 2 if one_plate else cyp
+                bobjs.append(BObject(obj.name, parts, 1, cxp, y))
             else:
                 i = cap_groups.index(g)
                 r, c = divmod(i, cols)
-                rows = (len(cap_groups) + cols - 1) // cols
-                bobjs.append(BObject(obj.name, parts, 2, cxp + (c - (cols - 1) / 2) * pitch,
-                                     cyp + ((rows - 1) / 2 - r) * pitch))
+                y_caps = (cyp - total / 2 + caps_h / 2) if one_plate else cyp
+                bobjs.append(BObject(obj.name, parts, 1 if one_plate else 2, cxp + (c - (cols - 1) / 2) * pitch,
+                                     y_caps + ((rows - 1) / 2 - r) * pitch))
         write_bambu_3mf(exp / f"{base}_bambu.3mf", bobjs, settings or print_profile.load(None), title=proj.name,
                         colors=list(fmap.keys()))
 
@@ -116,6 +129,7 @@ def export_all(res: BuildResult, report: ValidationReport, root: Path,
         "print_orientation": print_orientation(res),
         "filaments": [{"slot": i, "color": c} for c, i in fmap.items()],
         "texture": proj.body.texture,
+        "bambu_plates": plates,
         "files": {"_bambu.3mf": "Bambu Studio project: plate 1 body, plate 2 keycaps, print settings per object",
                   "_print.3mf": "generic multi-material 3MF (geometry + colours)"},
         "step_note": "STEP holds the untextured B-rep body; textures are in STL/3MF" if proj.body.texture != "smooth" else "",

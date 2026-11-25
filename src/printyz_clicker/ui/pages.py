@@ -1079,6 +1079,12 @@ class ExportPage(Page):
             cb.setChecked(True)
             self.fmt[k] = cb
             self.add(cb)
+        self.section(tr("פלטות ב־Bambu Studio", "Plates in Bambu Studio"))
+        self.plates = Segmented([("2", tr("שתי פלטות: גוף / כובעים", "Two plates: body / keycaps")),
+                                 ("1", tr("פלטה אחת להכל", "One plate for all"))], per_row=1)
+        self.plates.set_value(str(self._qs.value("bambu_plates", "2")))
+        self.plates.changed.connect(lambda v: self._qs.setValue("bambu_plates", v))
+        self.add(self.plates)
         self.previews = QCheckBox(tr("תמונות תצוגה", "Preview images"))
         self.previews.setChecked(True)
         self.add(self.previews)
@@ -1137,6 +1143,9 @@ class ExportPage(Page):
 
     def refresh(self) -> None:
         self.dev_box.setVisible(self.ctl.developer_mode)
+
+    def plate_count(self) -> int:
+        return 1 if str(self._qs.value("bambu_plates", "2")) == "1" else 2
 
     def set_folder(self, d: str) -> None:
         """Remember the chosen export folder for next time."""
