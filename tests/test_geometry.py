@@ -225,7 +225,16 @@ def test_bambu_project_two_plates_and_settings(tmp_path):
     assert plate1.count("<model_instance>") == 1                           # body alone on plate 1
     assert cfg.split("<plate>")[2].count("<model_instance>") == 2           # two keycaps on plate 2
     assert 'key="wall_generator" value="arachne"' in cfg and 'key="outer_wall_speed" value="60"' in cfg
-    assert "BambuStudio" in model
+    assert "BambuStudio-02." in model
+    with zipfile.ZipFile(out / "Exports" / "t_bambu.3mf") as z:
+        import json
+        ps = json.loads(z.read("Metadata/project_settings.config"))
+        assert {"Metadata/slice_info.config", "Metadata/filament_sequence.json"} <= set(z.namelist())
+    assert ps["print_settings_id"] == "0.16mm High Quality @BBL A1"
+    assert ps["printer_settings_id"].startswith("Bambu Lab A1")
+    assert ps["filament_colour"][:3] == [res.project.colors.body.upper(), res.project.colors.cap.upper(),
+                                         res.project.colors.legend.upper()]
+    assert ps["wall_generator"] == "arachne" and ps["outer_wall_speed"] == ["60"]
 
 
 def test_legends_centred_on_keycaps_all_fonts():

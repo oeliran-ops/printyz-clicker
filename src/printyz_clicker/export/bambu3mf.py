@@ -3,17 +3,19 @@
 
 Format follows Bambu Studio's project layout (3D/3dmodel.model with components pointing to
 3D/Objects/*.model, Metadata/model_settings.config with <object>/<part>/<plate>).
-Process/printer presets are NOT embedded (a partial project_settings.config could override
-your printer); the settings travel as per-object overrides instead.
-
-VERIFY on the target Bambu Studio version (see export report).
+The project settings (printer, process preset, filaments) come from a project the user saved
+in their own Bambu Studio (assets/bambu/project_settings.config), so the file opens with
+exactly their A1 setup. Filament colours are replaced with the project's colours, and the
+per-object print settings are written as well (both, like Bambu Studio does).
 """
 
 from __future__ import annotations
 
+import json
 import uuid
 import zipfile
 from dataclasses import dataclass
+from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
 import numpy as np
@@ -21,7 +23,41 @@ import numpy as np
 from ..config.print_profile import BED_SIZE, PLATE_GAP_RATIO
 from .mesh import Mesh
 
-APP = "BambuStudio-01.09.07.52"
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "assets" / "bambu"
+
+
+def _template() -> tuple[str, dict]:
+    meta = json.loads((TEMPLATE_DIR / "template.json").read_text("utf-8"))
+    settings = json.loads((TEMPLATE_DIR / "project_settings.config").read_text("utf-8"))
+    return meta["application"], settings
+
+
+def project_settings_for(colors: list[str], overrides: dict[str, str]) -> dict:
+    """The user's saved Bambu project settings with this project's filament colours and print overrides."""
+    _, ps = _template()
+    ps = json.loads(json.dumps(ps))                      # deep copy
+    n_tpl = len(ps["filament_colour"])
+    n = max(len(colors), 1)
+    if n > n_tpl:
+        # more filaments than the template: extend every per-filament list by repeating the last entry
+        for k, v in ps.items():
+            if isinstance(v, list) and len(v) == n_tpl and (k.startswith("filament") or k in PER_FILAMENT):
+                ps[k] = v + [v[-1]] * (n - n_tpl)
+    ps["filament_colour"] = [c.upper() for c in colors] + ps["filament_colour"][len(colors):]
+    for k, v in overrides.items():                       # keep the per-object values in the project too
+        if k in ps:
+            ps[k] = [v] if isinstance(ps[k], list) else v
+    return ps
+
+
+# per-filament keys that do not start with "filament"
+PER_FILAMENT = {"nozzle_temperature", "nozzle_temperature_initial_layer", "hot_plate_temp", "cool_plate_temp",
+                "eng_plate_temp", "textured_plate_temp", "hot_plate_temp_initial_layer",
+                "cool_plate_temp_initial_layer", "eng_plate_temp_initial_layer",
+                "textured_plate_temp_initial_layer", "fan_max_speed", "fan_min_speed", "default_filament_colour",
+                "temperature_vitrification", "required_nozzle_HRC", "slow_down_layer_time", "slow_down_min_speed"}
+
+APP, _ = _template()
 NS = ('xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
       'xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" '
       'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"')
@@ -55,7 +91,8 @@ def plate_origin(plate: int) -> tuple[float, float]:
     return (plate - 1) * stride, 0.0
 
 
-def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], title: str = "PRINTYZ") -> None:
+def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], title: str = "PRINTYZ",
+                    colors: list[str] | None = None) -> None:
     files: dict[str, str] = {}
     rels = []
     root_objs, build_items, cfg = [], [], ['<?xml version="1.0" encoding="UTF-8"?>', "<config>"]
@@ -101,15 +138,16 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
         cfg.append(f' <object id="{oid}">')
         cfg.append(f'  <metadata key="name" value={quoteattr(obj.name)}/>')
         cfg.append(f'  <metadata key="extruder" value="{obj.parts[0].extruder}"/>')
-        for k, val in settings.items():
+        for k, val in sorted(settings.items()):
             cfg.append(f'  <metadata key="{k}" value={quoteattr(str(val))}/>')
+        cfg.append(f'  <metadata face_count="{sum(len(p.mesh.faces) for p in obj.parts)}"/>')
         for pid, part in zip(part_ids, obj.parts):
-            cfg.append(f'  <part id="{pid}" subtype="normal_part">')
+            cfg.append(f'  <part id="{pid}" subtype="normal_part" uuid="{uuid.uuid4()}">')
             cfg.append(f'   <metadata key="name" value={quoteattr(part.name)}/>')
             cfg.append('   <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>')
             cfg.append(f'   <metadata key="extruder" value="{part.extruder}"/>')
-            cfg.append('   <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" '
-                       'facets_reversed="0" backwards_edges="0"/>')
+            cfg.append(f'   <mesh_stat face_count="{len(part.mesh.faces)}" edges_fixed="0" degenerate_facets="0" '
+                       'facets_removed="0" facets_reversed="0" backwards_edges="0"/>')
             cfg.append("  </part>")
         cfg.append(" </object>")
 
@@ -119,6 +157,7 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
         cfg.append(f'  <metadata key="plater_id" value="{plate}"/>')
         cfg.append(f'  <metadata key="plater_name" value={quoteattr(names.get(plate, ""))}/>')
         cfg.append('  <metadata key="locked" value="false"/>')
+        cfg.append('  <metadata key="filament_map_mode" value="Auto For Flush"/>')
         for oid, ident in plates[plate]:
             cfg.append("  <model_instance>")
             cfg.append(f'   <metadata key="object_id" value="{oid}"/>')
@@ -158,3 +197,13 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
         for name, text in files.items():
             z.writestr(name, text)
         z.writestr("Metadata/model_settings.config", "\n".join(cfg))
+        ps = project_settings_for(colors or [], settings)
+        z.writestr("Metadata/project_settings.config", json.dumps(ps, indent=4, ensure_ascii=False))
+        ver = APP.split("-", 1)[1]
+        z.writestr("Metadata/slice_info.config",
+                   '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <header>\n'
+                   '    <header_item key="X-BBL-Client-Type" value="slicer"/>\n'
+                   f'    <header_item key="X-BBL-Client-Version" value="{ver}"/>\n  </header>\n</config>\n')
+        z.writestr("Metadata/filament_sequence.json",
+                   json.dumps({f"plate_{p}": {"nozzle_sequence": [], "optimal_assignment": [], "sequence": []}
+                               for p in sorted(plates)}))

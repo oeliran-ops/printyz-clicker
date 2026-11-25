@@ -83,7 +83,8 @@ def export_all(res: BuildResult, report: ValidationReport, root: Path,
                 rows = (len(cap_groups) + cols - 1) // cols
                 bobjs.append(BObject(obj.name, parts, 2, cxp + (c - (cols - 1) / 2) * pitch,
                                      cyp + ((rows - 1) / 2 - r) * pitch))
-        write_bambu_3mf(exp / f"{base}_bambu.3mf", bobjs, settings or print_profile.load(None), title=proj.name)
+        write_bambu_3mf(exp / f"{base}_bambu.3mf", bobjs, settings or print_profile.load(None), title=proj.name,
+                        colors=list(fmap.keys()))
 
     summary = {
         "project": proj.name,
