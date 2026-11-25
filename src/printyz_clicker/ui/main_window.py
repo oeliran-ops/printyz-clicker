@@ -183,7 +183,7 @@ class MainWindow(QMainWindow):
         dl = QPushButton(icon("export", "#FFFFFF"), tr("  הורדת קבצי הדפסה  \u2066(3MF)\u2069", "  Download 3MF"))
         dl.setObjectName("Primary")
         dl.setMinimumHeight(42)
-        dl.clicked.connect(lambda: self.export(Path(self.export_page.folder.text()), ("3mf", "stl", "step"), True))
+        dl.clicked.connect(self.export_ask_folder)
         v.addWidget(dl)
         hist = QHBoxLayout()
         self.undo_btn = QPushButton("↶ " + tr("בטל", "Undo"))
@@ -367,6 +367,18 @@ class MainWindow(QMainWindow):
                 page.ctl = self.ctl
             if hasattr(page, "refresh"):
                 page.refresh()
+
+    def export_ask_folder(self) -> None:
+        """Main download button: let the user choose where to save (starts at the last folder used)."""
+        start = self.export_page.folder.text()
+        Path(start).mkdir(parents=True, exist_ok=True)
+        d = QFileDialog.getExistingDirectory(self, tr("בחר היכן לשמור את קבצי ההדפסה", "Choose where to save the print files"),
+                                             start)
+        if not d:
+            return                                           # cancelled: nothing is written
+        self.export_page.set_folder(d)
+        self.export(Path(d), tuple(k for k, cb in self.export_page.fmt.items() if cb.isChecked()),
+                    self.export_page.previews.isChecked())
 
     def export(self, folder: Path, formats: tuple[str, ...], previews: bool) -> None:
         self.ctl.wait_idle()

@@ -134,3 +134,29 @@ def test_symbol_apply_any_order_and_customer_library(app, tmp_path):
     sp._rebuild_grid()
     assert "cat" not in sp.buttons and "heart" in sp.buttons
     w.close()
+
+
+def test_export_asks_for_folder_and_remembers_it(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    set_language("he")
+    w = MainWindow()
+    w.ctl.wait_idle()
+    target = tmp_path / "my_choice"
+    target.mkdir()
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(target))
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: 0)
+    w.export_page.fmt["step"].setChecked(False)
+    w.export_page.previews.setChecked(False)
+    w.export_ask_folder()
+    assert list(target.glob("*/Exports/*_print.3mf"))                 # written where the user chose
+    assert w.export_page.folder.text() == str(target)
+    from PySide6.QtCore import QSettings
+    assert QSettings("PRINTYZ", "Clicker Studio").value("export_folder") == str(target)
+    # cancelling the dialog writes nothing
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: "")
+    other = tmp_path / "untouched"
+    w.export_page.set_folder(str(other))
+    w.export_ask_folder()
+    assert not other.exists() or not list(other.glob("*/Exports"))
+    w.close()

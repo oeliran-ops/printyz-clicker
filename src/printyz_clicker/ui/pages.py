@@ -1041,7 +1041,12 @@ class ExportPage(Page):
         self.settings = print_profile.load(settings_path)
         self.section(tr("תיקיית פרויקטים", "Projects folder"))
         row = QHBoxLayout()
-        self.folder = QLineEdit(str(Path.home() / "Documents" / "PRINTYZ" / "Projects"))
+        from PySide6.QtCore import QSettings
+
+        self._qs = QSettings("PRINTYZ", "Clicker Studio")
+        default = str(Path.home() / "Documents" / "PRINTYZ" / "Projects")
+        self.folder = QLineEdit(str(self._qs.value("export_folder", default)))
+        self.folder.editingFinished.connect(lambda: self.set_folder(self.folder.text()))
         browse = QPushButton("…")
         browse.clicked.connect(self._browse)
         row.addWidget(self.folder, 1)
@@ -1058,7 +1063,7 @@ class ExportPage(Page):
         self.previews = QCheckBox(tr("תמונות תצוגה", "Preview images"))
         self.previews.setChecked(True)
         self.add(self.previews)
-        btn = QPushButton(tr("ייצא קבצי הדפסה", "Export print files"))
+        btn = QPushButton(tr("ייצא לתיקייה שלמעלה", "Export to the folder above"))
         btn.setObjectName("Primary")
         btn.clicked.connect(lambda: do_export(Path(self.folder.text()),
                                               tuple(k for k, cb in self.fmt.items() if cb.isChecked()),
@@ -1114,10 +1119,15 @@ class ExportPage(Page):
     def refresh(self) -> None:
         self.dev_box.setVisible(self.ctl.developer_mode)
 
+    def set_folder(self, d: str) -> None:
+        """Remember the chosen export folder for next time."""
+        self.folder.setText(d)
+        self._qs.setValue("export_folder", d)
+
     def _browse(self) -> None:
         d = QFileDialog.getExistingDirectory(self, tr("בחר תיקייה", "Choose folder"), self.folder.text())
         if d:
-            self.folder.setText(d)
+            self.set_folder(d)
 
 
 # ---------------------------------------------------------------------------------------------
