@@ -78,7 +78,8 @@ class KeycapStyle:
     top_thickness: float
     corner_radius: float
     top_edge_fillet: float
-    stem_offset: float          # skirt bottom -> stem bottom distance
+    stem_offset: float          # skirt bottom -> stem bottom distance (MEASURED on the reference keycap:
+                                # the stem runs down to the skirt plane; 9.996 mm from inner top to stem end)
     stem_diameter: float = 5.60
     cross_length: float = 4.15  # VERIFY with a test print
     cross_width: float = 1.30   # VERIFY with a test print
@@ -105,17 +106,17 @@ KEYCAP_STYLES: dict[str, KeycapStyle] = {
     "standard": KeycapStyle(
         name="standard", bottom_width=18.14, height=11.83, taper_deg=6.725,
         wall=1.50, top_thickness=1.80, corner_radius=2.0, top_edge_fillet=0.8,
-        stem_offset=4.60,
+        stem_offset=0.03,
     ),
     "low_profile": KeycapStyle(
         name="low_profile", bottom_width=18.14, height=8.00, taper_deg=6.725,
         wall=1.50, top_thickness=1.60, corner_radius=2.0, top_edge_fillet=0.6,
-        stem_offset=2.40,
+        stem_offset=0.03,
     ),
     "thocky": KeycapStyle(
         name="thocky", bottom_width=18.14, height=12.30, taper_deg=6.725,
         wall=2.00, top_thickness=2.50, corner_radius=2.2, top_edge_fillet=1.0,
-        stem_offset=4.60,
+        stem_offset=0.03,
     ),
 }
 

@@ -93,6 +93,10 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
     rep.add("key count / מספר מקשים", OK, f"{n} (1–10)")
 
     # --- mechanical envelope -------------------------------------------------
+    inner = st.height - st.top_thickness
+    rep.add("keycap stem / פין הכובע", OK if st.stem_length >= inner - 0.5 and st.stem_length >= st.socket_depth + 0.3
+            else ERROR,
+            f"{st.stem_length:.2f} mm from inner top (reaches {st.stem_offset:.2f} mm from the skirt; reference 9.996 mm)")
     rest = mech.keycap_rest_z(st)
     pressed = rest - sw.travel
     gap = pressed - mech.plate_top_z

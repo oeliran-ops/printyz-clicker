@@ -264,3 +264,18 @@ def test_export_never_overwrites_by_default(tmp_path):
     b = export_all(res, validate(res), tmp_path, ("3mf",))
     c = export_all(res, validate(res), tmp_path, ("3mf",), name="t", overwrite=True)
     assert a.name == "t" and b.name == "t_2" and c == a
+
+
+@pytest.mark.parametrize("style", list(KEYCAP_STYLES))
+def test_stem_reaches_skirt_plane(style):
+    """Printed-sample fix: the MX stem runs down to the skirt (reference keycap: 9.996 mm from inner top)."""
+    from build123d import Vector
+
+    from printyz_clicker.geometry.keycap import keycap_body
+
+    st = KEYCAP_STYLES[style]
+    cap = keycap_body(st)
+    low = next(z / 100 for z in range(0, int(st.height * 100)) if cap.is_inside(Vector(2.5, 0, z / 100)))
+    assert low <= 0.05                                    # stem end at the skirt plane
+    if style == "standard":
+        assert abs((st.height - st.top_thickness - low) - 9.996) < 0.05
