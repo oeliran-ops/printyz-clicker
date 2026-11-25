@@ -184,6 +184,6 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
         k = p.keychain
         root_area = max(k.width, k.hole_diameter + 4) * max(k.thickness, 4.0)
         rep.add("keychain / מחזיק מפתחות", OK if len(body.solid.solids()) == 1 else ERROR,
-                f"{k.shape}: fused to body, {max(k.thickness, 4.0):.1f} mm thick, {k.gusset:.1f} mm 45° gusset at the "
-                f"root, ≥2 mm around the hole; root section ≈{root_area:.0f} mm² + gusset. Pull-test a print.")
+                f"{k.shape}: fused to body, {max(k.thickness, 4.0):.1f} mm thick, ≥2 mm around the hole; "
+                f"root section ≈{root_area:.0f} mm². Pull-test a print.")
     return rep

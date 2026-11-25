@@ -117,7 +117,6 @@ def _keychain(outline, spec: KeychainSpec, mech: MechanicalProfile, warnings: li
     r_hole = spec.hole_diameter / 2
     root = 2.0
     MIN_RING, MIN_BODY, MIN_THICK = 2.0, 1.5, 4.0      # strength rules for every shape
-    g = max(0.0, spec.gusset)
     width = spec.width
     off = -spec.offset if spec.side in ("bottom", "right") else spec.offset   # +offset = +X / +Y after rotation
     # the tab must sit on ONE straight stretch of the outer wall (e.g. WASD: not over the empty corner)
@@ -141,8 +140,7 @@ def _keychain(outline, spec: KeychainSpec, mech: MechanicalProfile, warnings: li
     if spec.thickness < MIN_THICK:
         warnings.append(f"עובי המחזיק הוגדל ל-{MIN_THICK} מ\"מ לחוזק. / tab thickness raised to {MIN_THICK} mm.")
     thickness = max(spec.thickness, MIN_THICK)
-    # the hole must start beyond the gusset so a key ring passes freely
-    min_hole_d = r_hole + max(MIN_BODY, g + 0.8)
+    min_hole_d = r_hole + MIN_BODY
     if spec.shape == "round":
         corner = width / 2 - 0.05                      # full semicircle end, hole concentric with it
         hole_d = max(spec.length - width / 2, min_hole_d)
@@ -162,19 +160,13 @@ def _keychain(outline, spec: KeychainSpec, mech: MechanicalProfile, warnings: li
         width + 2 * rr + 2.0, length + 3 * root))
     region = merged & window
     tab = extrude(region, thickness)
-    if g > 0:
-        # 45 degree gusset across the whole root: no sharp inside corner where the tab meets the wall
-        prof = Plane.YZ * Polygon((surface - 1.0, thickness - 0.01), (surface + g, thickness - 0.01),
-                                  (surface - 1.0, thickness + g + 1.0), align=None)
-        wedge = Pos(off, 0, 0) * extrude(prof, width / 2 + rr * 0.5, both=True)
-        tab = tab + rot * wedge
     hx, hy = off, surface + hole_d
     a = math.radians(angle)
     wx, wy = hx * math.cos(a) - hy * math.sin(a), hx * math.sin(a) + hy * math.cos(a)
     hole = Pos(wx, wy, -1) * Cylinder(r_hole, thickness + 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
     rx, ry = off * math.cos(a) - surface * math.sin(a), off * math.sin(a) + surface * math.cos(a)
-    # texture exclusion: around the tab root, up to the gusset top (+1.5 mm) - no notch over the joint
-    return tab, hole, (wx, wy), (rx, ry, width / 2 + spec.root_radius + 1.5, thickness + g + 2.0)
+    # texture exclusion: around the tab root, up to the tab top (+1.5 mm) - no groove right on the joint
+    return tab, hole, (wx, wy), (rx, ry, width / 2 + spec.root_radius + 1.5, thickness + 1.5)
 
 
 def _clip_notches(b, sw, plate_bot: float) -> list:

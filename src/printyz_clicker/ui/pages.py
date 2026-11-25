@@ -961,13 +961,12 @@ class KeychainPage(Page):
         for attr, lab, lo, hi in (("hole_diameter", tr("קוטר חור", "Hole Ø"), 3, 8),
                                   ("width", tr("רוחב", "Width"), 8, 20), ("length", tr("אורך", "Length"), 6, 16),
                                   ("thickness", tr("עובי", "Thickness"), 4.0, 8),
-                                  ("gusset", tr("חיזוק בבסיס (45°)", "Root gusset (45°)"), 0.0, 5),
                                   ("root_radius", tr("רדיוס חיבור", "Root radius"), 0.5, 4)):
             s = dspin(lo, hi, 0.1, getattr(k, attr))
             s.valueChanged.connect(lambda v, a=attr: self._set(a, v))
             f.addRow(lab, s)
             self.fields[attr] = s
-        self.hint(tr("כללי חוזק קבועים לכל הצורות: לפחות 2 מ\"מ חומר סביב החור, עובי 4 מ\"מ לפחות (ברירת מחדל 5), וחיזוק משופע בבסיס הלשונית; החור תמיד מחוץ לחיזוק. "
+        self.hint(tr("כללי חוזק קבועים לכל הצורות: לפחות 2 מ\"מ חומר סביב החור, עובי 4 מ\"מ לפחות (ברירת מחדל 5). "
                      "ערך שאינו עומד בהם מתוקן אוטומטית. מומלץ בדיקת משיכה בהדפסה לפני שימוש מסחרי.",
                      "Strength rules for all shapes: 2 mm around the hole, 1.5 mm to the body, 3 mm thick; "
                      "values below are corrected automatically. Pull-test a print before commercial use."))
