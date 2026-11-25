@@ -226,3 +226,22 @@ def test_bambu_project_two_plates_and_settings(tmp_path):
     assert cfg.split("<plate>")[2].count("<model_instance>") == 2           # two keycaps on plate 2
     assert 'key="wall_generator" value="arachne"' in cfg and 'key="outer_wall_speed" value="60"' in cfg
     assert "BambuStudio" in model
+
+
+def test_legends_centred_on_keycaps_all_fonts():
+    """Every letter and symbol is centred on its keycap (bounding-box centre), for every bundled font."""
+    from printyz_clicker.fonts.registry import FontRegistry
+    from printyz_clicker.text.engine import insert_key_visual
+
+    reg = FontRegistry.default()
+    for fid, e in reg.fonts.items():
+        if not e.approved:
+            continue
+        p = make("מלכה" if e.supports_hebrew else "AgQi", lettering__font_id=fid)
+        insert_key_visual(p, "left", None, "symbol", "crown_queen")
+        res = build_project(p, reg, include_switches=False)
+        assert res.ok, (fid, res.errors)
+        for pk in res.layout.keys:
+            for leg in (x for x in res.parts if x.role == "legend" and x.key_id == pk.key_id):
+                c = leg.solid.bounding_box().center()
+                assert abs(c.X - pk.x) < 0.01 and abs(c.Y - pk.y) < 0.01, fid

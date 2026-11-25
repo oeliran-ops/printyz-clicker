@@ -95,6 +95,12 @@ class Viewer3D(QtInteractor):
     # ---- camera ---------------------------------------------------------------
     def set_view(self, view: str) -> None:
         self._view = view
+        # top / side / bottom are technical views: orthographic, so centring and sizes read true.
+        # The 3D view keeps perspective for a natural look.
+        if view == "iso":
+            self.disable_parallel_projection()
+        else:
+            self.enable_parallel_projection()
         if view == "top":
             self.view_xy()
         elif view == "side":
