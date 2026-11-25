@@ -168,6 +168,19 @@ def _keychain(outline, spec: KeychainSpec, mech: MechanicalProfile, warnings: li
     return tab, hole, (wx, wy), (rx, ry, width / 2 + spec.root_radius + 1.0, thickness + 1.0)
 
 
+def _clip_notches(b, sw, plate_bot: float) -> list:
+    """Small recesses under the plate where the MX clips spring out. Ceiling = plate underside
+    (short bridge), floor = 45 degree slope, so nothing is printed in the air."""
+    half = sw.plate_hole / 2
+    y0, y1 = half - 0.6, half + b.clip_notch_depth           # start inside the pocket for a clean cut
+    top, mid = plate_bot, plate_bot - b.clip_notch_height
+    low = mid - (y1 - y0)                                     # 45 degree floor down into the pocket
+    prof = Plane.YZ * Polygon((y0, top), (y1, top), (y1, mid), (y0, low), align=None)
+    notch = extrude(prof, b.clip_notch_width / 2, both=True)
+    sides = {"ns": (0, 180), "ew": (90, 270), "all": (0, 90, 180, 270)}.get(b.clip_notch_sides, (0, 180))
+    return [Rot(0, 0, a) * notch for a in sides]
+
+
 def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign,
                keychain: KeychainSpec) -> BodyResult:
     b = mech.body
@@ -197,7 +210,6 @@ def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign
     # cavities per cell
     plate_bot = b.plate_bottom_z
     plate_top = plate_bot + sw.plate_thickness
-    ch = (b.lower_pocket - b.plate_chamfer_to) / 2.0   # 45 degree transition
     cutters = []
     for k in layout.keys:
         at = Pos(k.x, k.y)
@@ -205,12 +217,11 @@ def build_body(layout: LayoutResult, mech: MechanicalProfile, design: BodyDesign
                                     b.height - plate_top + 1.0))
         cutters.append(at * Pos(0, 0, plate_bot - 0.1) * Box(
             sw.plate_hole, sw.plate_hole, sw.plate_thickness + 0.2, align=(Align.CENTER, Align.CENTER, Align.MIN)))
+        # pocket under the plate: straight walls from the floor up to the plate (plate prints on material)
         cutters.append(at * extrude(_rounded_square(b.lower_pocket, b.pocket_corner_radius, b.floor),
-                                    b.lower_pocket_depth - ch))
-        cutters.append(at * loft([
-            _rounded_square(b.lower_pocket, b.pocket_corner_radius, plate_bot - ch),
-            _rounded_square(b.plate_chamfer_to, b.pocket_corner_radius, plate_bot),
-        ]))
+                                    b.lower_pocket_depth))
+        for notch in _clip_notches(b, sw, plate_bot):
+            cutters.append(at * notch)
     for c in cutters:
         solid = solid - c
     if hole_cutter is not None:

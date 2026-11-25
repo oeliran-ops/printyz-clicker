@@ -65,7 +65,7 @@ def _row_major_rtl_aware(slots: list[tuple[int, int]], rtl: bool, cols: int) -> 
 
 def compute_layout(project: Project) -> LayoutResult:
     spec = project.layout
-    pitch = project.mechanical.body.pitch
+    pitch = project.effective_mechanics().body.pitch
     keys = project.keys
     rtl = key_direction(project) == "rtl"
     errors: list[str] = []

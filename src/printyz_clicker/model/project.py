@@ -71,6 +71,7 @@ class BodyDesign:
     texture_depth: float = 0.5
     texture_unit: float = 2.4            # pattern size (mm)
     rim_height: Optional[float] = None   # body height override (None = calibrated 17.64)
+    partition: float = 1.75              # wall thickness between key cells (mm), as in the MakerWorld model
 
 
 @dataclass
@@ -112,6 +113,16 @@ class Project:
     mechanical: MechanicalProfile = field(default_factory=lambda: DEFAULT_PROFILE)
 
     # ---- convenience -------------------------------------------------
+    def effective_mechanics(self) -> MechanicalProfile:
+        """Mechanical profile with the design choices applied (partition, rim height).
+        Layout, geometry and validation all use this one function."""
+        import dataclasses
+
+        body = dataclasses.replace(self.mechanical.body, partition=self.body.partition)
+        if self.body.rim_height is not None:
+            body = dataclasses.replace(body, height=self.body.rim_height)
+        return dataclasses.replace(self.mechanical, body=body)
+
     def key_by_id(self, key_id: str) -> KeySlot:
         for k in self.keys:
             if k.id == key_id:

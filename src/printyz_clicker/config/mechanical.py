@@ -23,7 +23,7 @@ class SwitchSpec:
     below_plate_depth: float = 5.00     # VERIFY: housing below plate
     pin_length: float = 3.30            # VERIFY: pins below housing
     housing_top_above_plate: float = 6.60  # VERIFY
-    bottom_housing_width: float = 15.60    # VERIFY: widest part under the plate
+    bottom_housing_width: float = 14.00    # MX bottom housing passes through the plate cut-out
     travel: float = 4.00                # MX total travel
     # keycap stem bottom rests this far above the housing top (= travel to bottom-out)
     stem_rest_gap: float = 4.00         # VERIFY
@@ -34,19 +34,24 @@ class BodySpec:
     single_outer: float = 23.80         # MEASURED: single-body outer width/length
     height: float = 17.64               # MEASURED: body height
     upper_recess: float = 20.75         # MEASURED: keycap recess opening
-    partition: float = 2.00             # design value: wall between recesses
+    partition: float = 1.75             # wall between key recesses; MEASURED on the MakerWorld clicker model
     floor: float = 2.00                 # design value: closed bottom
-    lower_pocket: float = 17.10         # MEASURED (interpretation VERIFY): pocket under plate
-    lower_pocket_depth: float = 8.50    # VERIFY: floor-top to plate-bottom
-    plate_chamfer_to: float = 15.90     # pocket narrows to this at plate (45 deg) to avoid overhang
+    lower_pocket: float = 14.20         # pocket under the plate: straight walls up to the plate, so the
+                                        # plate is printed on solid material (no floating ledge)
+    lower_pocket_depth: float = 8.50    # floor-top to plate-bottom (switch needs 5.0 housing + 3.3 pins)
+    clip_notch_width: float = 6.00      # recesses for the MX clips under the plate (VERIFY with a print)
+    clip_notch_depth: float = 0.80
+    clip_notch_height: float = 1.70     # vertical part; below it a 45 degree floor (self-supporting)
+    clip_notch_sides: str = "ns"        # "ns" = clips on the north/south faces, "ew", or "all"
     outer_corner_radius: float = 3.00
     concave_corner_radius: float = 1.50
     recess_corner_radius: float = 1.00
-    pocket_corner_radius: float = 1.00
+    pocket_corner_radius: float = 0.50
     edge_fillet: float = 0.80           # top / bottom outer edge rounding
     groove_depth: float = 0.80          # reference groove depth
     groove_width: float = 1.60
-    min_wall: float = 1.20              # validation threshold
+    min_wall: float = 1.20              # validation threshold (outer wall)
+    min_partition: float = 0.80         # two 0.4 mm extrusion lines
 
     @property
     def pitch(self) -> float:

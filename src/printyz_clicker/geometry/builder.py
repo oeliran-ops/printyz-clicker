@@ -110,9 +110,7 @@ def build_project(project: Project, fonts: FontRegistry | None = None,
     res.errors += layout.errors
     if not res.ok:
         return res
-    mech = project.mechanical
-    if project.body.rim_height is not None:
-        mech = dataclasses.replace(mech, body=dataclasses.replace(mech.body, height=project.body.rim_height))
+    mech = project.effective_mechanics()
     res.mech = mech
     try:
         style = keycap_with_height(style, project.keycap_height)

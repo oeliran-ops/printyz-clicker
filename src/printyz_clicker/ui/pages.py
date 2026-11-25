@@ -804,6 +804,11 @@ class BodyPage(Page):
         self.add(self.rim)
         self.hint(tr("שפה גבוהה יותר מסתירה חלק גדול יותר מהכובע. הבדיקות מוודאות שהכובע לא נתקע בלחיצה.",
                      "A taller rim hides more of the keycap; checks make sure keys never rub when pressed."))
+        self.section(tr("מחיצה בין התאים", "Wall between key cells"))
+        self.partition = SliderRow(0.8, 3.0, 0.1, 1, " mm")
+        self.partition.changed.connect(lambda v: self._set("partition", round(v, 2)))
+        self.add(self.partition)
+        self.partition_info = self.hint("")
         self.section(tr("חיבור בין המקשים", "Joint between keys"))
         self.joint = Segmented([("grooved", tr("שקע עדין", "Grooved")), ("smooth", tr("חלק", "Smooth"))])
         self.joint.changed.connect(lambda v: self._set("joint", v))
@@ -832,6 +837,12 @@ class BodyPage(Page):
         self.tdepth.setEnabled(b.texture != "smooth")
         self.tunit.setEnabled(b.texture != "smooth")
         self.rim.set_value(b.rim_height or 17.64)
+        self.partition.set_value(b.partition)
+        res = self.ctl.result
+        if res is not None and res.body is not None:
+            x0, y0, x1, y1 = res.body.outline_bbox
+            self.partition_info.setText(tr(f"מחיצה דקה = מוצר קצר יותר וחיסכון בחומר. מידות הגוף כעת: {x1 - x0:.1f} × {y1 - y0:.1f} מ\"מ",
+                                           f"Thinner wall = shorter product, less material. Body now {x1 - x0:.1f} × {y1 - y0:.1f} mm"))
         self.joint.set_value(b.joint)
         self.depth.setEnabled(b.joint == "grooved")
 
@@ -1004,7 +1015,15 @@ class MechanicalPage(Page):
             f = self.form()
             for fld in dataclasses.fields(obj):
                 v = getattr(obj, fld.name)
-                s = dspin(0, 60, 0.05, v)
+                if isinstance(v, str):                    # e.g. clip_notch_sides: a choice, not a number
+                    c = QComboBox()
+                    for opt in ("ns", "ew", "all"):
+                        c.addItem(opt, opt)
+                    c.setCurrentIndex(max(0, c.findData(v)))
+                    c.currentIndexChanged.connect(lambda _i, g=group, n=fld.name, w=c: self._set(g, n, w.currentData()))
+                    f.addRow(fld.name, c)
+                    continue
+                s = dspin(0, 60, 0.05, float(v))
                 s.valueChanged.connect(lambda val, g=group, n=fld.name: self._set(g, n, val))
                 f.addRow(fld.name, s)
                 self.spins[(group, fld.name)] = s

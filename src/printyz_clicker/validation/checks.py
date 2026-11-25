@@ -110,12 +110,13 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
     under = sw.below_plate_depth + sw.pin_length
     rep.add("switch depth / עומק מתג", OK if under <= b.lower_pocket_depth else ERROR,
             f"switch needs {under:.2f} mm under plate, pocket is {b.lower_pocket_depth:.2f}")
-    rep.add("switch clip width", OK if sw.bottom_housing_width <= b.plate_chamfer_to - 0.2 else WARN,
-            f"housing {sw.bottom_housing_width} vs pocket at plate {b.plate_chamfer_to}")
-    overhang = (b.plate_chamfer_to - sw.plate_hole) / 2
-    rep.add("plate overhang / גשר מתחת לפלטה", OK if overhang <= 1.5 else WARN,
-            f"{overhang:.2f} mm unsupported ledge under the plate")
-    rep.add("partition / מחיצה", OK if b.partition >= b.min_wall else ERROR, f"{b.partition:.2f} mm")
+    rep.add("switch housing / בית המתג", OK if sw.bottom_housing_width <= b.lower_pocket - 0.1 else ERROR,
+            f"housing {sw.bottom_housing_width} mm in a {b.lower_pocket} mm pocket")
+    ledge = max((b.lower_pocket - sw.plate_hole) / 2, b.clip_notch_depth)
+    rep.add("plate support / תמיכת המסגרת", OK if ledge <= 1.0 else WARN,
+            f"plate printed on straight walls; largest unsupported span {ledge:.2f} mm (clip recesses, bridged)")
+    rep.add("partition / מחיצה", OK if b.partition >= b.min_partition else ERROR,
+            f"{b.partition:.2f} mm (min {b.min_partition})")
     lower_wall = b.pitch - b.lower_pocket
     rep.add("wall under partition", OK if lower_wall >= b.partition else ERROR,
             f"{lower_wall:.2f} mm (partition is supported from below)")

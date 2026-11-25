@@ -279,3 +279,22 @@ def test_stem_reaches_skirt_plane(style):
     assert low <= 0.05                                    # stem end at the skirt plane
     if style == "standard":
         assert abs((st.height - st.top_thickness - low) - 9.996) < 0.05
+
+
+def test_partition_thickness_option_and_plate_on_straight_walls():
+    from build123d import Vector
+
+    vol, length = {}, {}
+    for t in (1.0, 2.0):
+        res = build_project(make("abc", body__partition=t), include_switches=False)
+        assert validate(res, mesh_checks=False).passed
+        x0, _, x1, _ = res.body.outline_bbox
+        length[t], vol[t] = x1 - x0, res.body.solid.volume
+        b, sw = res.mech.body, res.mech.switch
+        # directly under the plate edge (inside the 14.2 pocket wall line) there is material all the way down
+        edge = sw.plate_hole / 2 + 0.3                 # just outside the 13.9 hole, beyond the 14.2 pocket
+        z_mid = (b.floor + b.plate_bottom_z) / 2
+        assert res.body.solid.is_inside(Vector(edge + 0.2, -3.5, z_mid))     # solid wall under the plate edge
+    assert abs((length[2.0] - length[1.0]) - 2.0) < 1e-6      # 3 keys = 2 walls, 1 mm thinner each
+    assert vol[1.0] < vol[2.0]
+    assert make("ab").body.partition == 1.75                   # default = the MakerWorld model (1.75 mm)
