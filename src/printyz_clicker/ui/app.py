@@ -24,6 +24,11 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("PRINTYZ Clicker Studio")
     app.setOrganizationName("PRINTYZ")
+    from pathlib import Path
+
+    from PySide6.QtGui import QIcon
+
+    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "printyz.png")))
     app.setStyle("Fusion")
     app.setPalette(light_palette())
     app.setStyleSheet(STYLESHEET)
