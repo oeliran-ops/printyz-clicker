@@ -181,7 +181,9 @@ def validate(res: BuildResult, mesh_checks: bool = True) -> ValidationReport:
         rep.add("texture / טקסטורה", OK if tex_ok else WARN,
                 f"{p.body.texture}, depth ≤ {b.outer_wall - 0.9:.2f} mm, outside wall only (pockets untouched)")
     if p.keychain.enabled:
+        k = p.keychain
+        root_area = max(k.width, k.hole_diameter + 4) * max(k.thickness, 4.0)
         rep.add("keychain / מחזיק מפתחות", OK if len(body.solid.solids()) == 1 else ERROR,
-                f"{p.keychain.shape}: fused to body, ≥2 mm around hole, ≥1.5 mm to body, ≥3 mm thick; "
-                "pull-test a print before commercial use")
+                f"{k.shape}: fused to body, {max(k.thickness, 4.0):.1f} mm thick, {k.gusset:.1f} mm 45° gusset at the "
+                f"root, ≥2 mm around the hole; root section ≈{root_area:.0f} mm² + gusset. Pull-test a print.")
     return rep

@@ -82,8 +82,9 @@ class KeychainSpec:
     offset: float = 0.0          # along the side, from the body centre
     hole_diameter: float = 5.2
     width: float = 12.0
-    length: float = 9.0          # from body surface
-    thickness: float = 4.0
+    length: float = 11.0         # from body surface (room for the gusset + 2 mm ring)
+    thickness: float = 5.0       # printed sample at 4 mm bent at the root
+    gusset: float = 3.0          # 45 deg support wedge between tab top and body wall (0 = none)
     corner_radius: float = 3.0
     root_radius: float = 2.0     # fillet where the tab meets the body
 

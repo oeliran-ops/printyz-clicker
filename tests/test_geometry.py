@@ -298,3 +298,22 @@ def test_partition_thickness_option_and_plate_on_straight_walls():
     assert abs((length[2.0] - length[1.0]) - 2.0) < 1e-6      # 3 keys = 2 walls, 1 mm thinner each
     assert vol[1.0] < vol[2.0]
     assert make("ab").body.partition == 1.75                   # default = the MakerWorld model (1.75 mm)
+
+
+def test_keychain_root_reinforced():
+    """Printed sample bent at the root: tab is 5 mm thick with a 45 deg gusset, hole clear of it."""
+    from build123d import Vector
+
+    p = make("ab")
+    p.keychain.enabled, p.keychain.side = True, "left"
+    res = build_project(p, include_switches=False)
+    assert validate(res, mesh_checks=True).passed
+    x0 = res.body.outline_bbox[0]                       # body surface on the left side
+    k = p.keychain
+    solid = res.body.solid
+    # material just outside the wall, above the tab top -> the gusset exists
+    assert solid.is_inside(Vector(x0 - 0.5, 0, k.thickness + 1.0))
+    assert not solid.is_inside(Vector(x0 - 0.5, 0, k.thickness + k.gusset + 1.5))   # 45 deg, not a block
+    hx, hy = res.body.keychain_hole
+    assert abs(hx - x0) - k.hole_diameter / 2 >= k.gusset + 0.8 - 1e-6              # ring passes freely
+    assert k.thickness == 5.0
