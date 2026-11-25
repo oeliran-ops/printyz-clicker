@@ -313,3 +313,23 @@ def test_keychain_root_reinforced():
     assert k.thickness == 5.0 and not hasattr(k, "gusset")
     assert res.body.solid.is_inside(Vector(x0 - 0.5, 0, k.thickness - 0.5))       # tab is 5 mm thick
     assert not res.body.solid.is_inside(Vector(x0 - 0.5, 0, k.thickness + 0.5))   # nothing above the tab
+
+
+def test_bambu_names_have_no_forbidden_characters(tmp_path):
+    """Bambu Studio: 'Invalid name, the following characters are not allowed: <>:/\\|?*"'."""
+    import re
+    import zipfile
+
+    from printyz_clicker.export.exporter import export_all
+
+    p = make("ab")
+    p.name = 'Dana: a/b "gift"?'
+    res = build_project(p, include_switches=False)
+    out = export_all(res, validate(res), tmp_path, ("3mf",))
+    f = next((out / "Exports").glob("*_bambu.3mf"))
+    with zipfile.ZipFile(f) as z:
+        cfg = z.read("Metadata/model_settings.config").decode()
+        model = z.read("3D/3dmodel.model").decode()
+    names = re.findall(r'key="(?:name|plater_name)" value="([^"]*)"', cfg)
+    names += re.findall(r'<metadata name="Title">([^<]*)<', model)
+    assert names and all(not set(n) & set('<>:/\\|?*"') and "&quot;" not in n for n in names), names

@@ -16,7 +16,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from xml.sax.saxutils import quoteattr
+from xml.sax.saxutils import escape, quoteattr
 
 import numpy as np
 
@@ -70,6 +70,15 @@ SUB_OBJECT_SUFFIX = "-81cb-4c03-9d28-80fed5dfa1dc"
 COMPONENT_SUFFIX = "-b206-40ff-9872-83e8017abed1"
 BUILD_ITEM_SUFFIX = "-b1ec-4553-aec9-835e5b724bb4"
 BUILD_UUID = "2c7c17d8-22b5-4d84-8835-1976022ea369"
+
+
+_FORBIDDEN = '<>:/\\|?*"'
+
+
+def bambu_name(name: str) -> str:
+    """Bambu Studio rejects names containing < > : / \\ | ? * " (and their escapes)."""
+    out = "".join("_" if ch in _FORBIDDEN or ord(ch) < 32 else ch for ch in str(name)).strip(" .")
+    return out or "PRINTYZ"
 
 
 def _today() -> str:
@@ -158,14 +167,14 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
         identify += 1
 
         cfg.append(f' <object id="{oid}">')
-        cfg.append(f'  <metadata key="name" value={quoteattr(obj.name)}/>')
+        cfg.append(f'  <metadata key="name" value={quoteattr(bambu_name(obj.name))}/>')
         cfg.append(f'  <metadata key="extruder" value="{obj.parts[0].extruder}"/>')
         for k, val in sorted(settings.items()):
             cfg.append(f'  <metadata key="{k}" value={quoteattr(str(val))}/>')
         cfg.append(f'  <metadata face_count="{sum(len(p.mesh.faces) for p in obj.parts)}"/>')
         for pid, part in zip(part_ids, obj.parts):
             cfg.append(f'  <part id="{pid}" subtype="normal_part" uuid="{uuid.uuid4()}">')
-            cfg.append(f'   <metadata key="name" value={quoteattr(part.name)}/>')
+            cfg.append(f'   <metadata key="name" value={quoteattr(bambu_name(part.name))}/>')
             cfg.append('   <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>')
             cfg.append(f'   <metadata key="extruder" value="{part.extruder}"/>')
             cfg.append(f'   <mesh_stat face_count="{len(part.mesh.faces)}" edges_fixed="0" degenerate_facets="0" '
@@ -173,11 +182,11 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
             cfg.append("  </part>")
         cfg.append(" </object>")
 
-    names = {1: "Body / גוף", 2: "Keycaps / כובעים"}
+    names = {1: "Body", 2: "Keycaps"}
     for plate in sorted(plates):
         cfg.append(" <plate>")
         cfg.append(f'  <metadata key="plater_id" value="{plate}"/>')
-        cfg.append(f'  <metadata key="plater_name" value={quoteattr(names.get(plate, ""))}/>')
+        cfg.append(f'  <metadata key="plater_name" value={quoteattr(bambu_name(names.get(plate, "")) if plate in names else "")}/>')
         cfg.append('  <metadata key="locked" value="false"/>')
         cfg.append('  <metadata key="filament_map_mode" value="Auto For Flush"/>')
         for oid, ident in plates[plate]:
@@ -214,7 +223,7 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
              ' <metadata name="ProfileCover"></metadata>',
              ' <metadata name="ProfileDescription"></metadata>',
              ' <metadata name="ProfileTitle"></metadata>',
-             f' <metadata name="Title">{title}</metadata>',
+             f' <metadata name="Title">{escape(bambu_name(title))}</metadata>',
              " <resources>", *root_objs, " </resources>",
              f' <build p:UUID="{BUILD_UUID}">', *build_items, " </build>", "</model>"]
 
