@@ -63,6 +63,24 @@ NS = ('xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
       'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"')
 IDENTITY = "1 0 0 0 1 0 0 0 1 0 0 0"
 
+# Bambu Studio's deterministic UUID scheme (as written by Bambu Studio 2.9 itself). Random UUIDs make
+# Bambu treat the file as coming from an old version and load geometry only.
+OBJECT_SUFFIX = "-61cb-4c03-9d28-80fed5dfa1dc"
+SUB_OBJECT_SUFFIX = "-81cb-4c03-9d28-80fed5dfa1dc"
+COMPONENT_SUFFIX = "-b206-40ff-9872-83e8017abed1"
+BUILD_ITEM_SUFFIX = "-b1ec-4553-aec9-835e5b724bb4"
+BUILD_UUID = "2c7c17d8-22b5-4d84-8835-1976022ea369"
+
+
+def _today() -> str:
+    import datetime
+
+    return datetime.date.today().isoformat()
+
+
+def _uid(n: int, suffix: str) -> str:
+    return f"{n:08x}{suffix}"
+
 
 @dataclass
 class BPart:
@@ -97,6 +115,7 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
     rels = []
     root_objs, build_items, cfg = [], [], ['<?xml version="1.0" encoding="UTF-8"?>', "<config>"]
     plates: dict[int, list[tuple[int, int]]] = {}
+    assemble: list[tuple[int, float, float]] = []
     next_id = 1
     identify = 100
     for oi, obj in enumerate(objects, start=1):
@@ -113,26 +132,29 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
             next_id += 1
             part_ids.append(pid)
             v = part.mesh.vertices - (cx, cy, zmin)
-            sub_lines.append(f'  <object id="{pid}" p:UUID="{uuid.uuid4()}" type="model">')
+            sub_lines.append(f'  <object id="{pid}" p:UUID="{_uid((oi << 16) | (len(part_ids) - 1), SUB_OBJECT_SUFFIX)}" '
+                             'type="model">')
             sub_lines.append("   <mesh>\n    <vertices>")
             sub_lines.extend(f'     <vertex x="{_f(x)}" y="{_f(y)}" z="{_f(z)}"/>' for x, y, z in v)
             sub_lines.append("    </vertices>\n    <triangles>")
             sub_lines.extend(f'     <triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in part.mesh.faces)
             sub_lines.append("    </triangles>\n   </mesh>\n  </object>")
-            comps.append(f'    <component p:path="{sub}" objectid="{pid}" p:UUID="{uuid.uuid4()}" transform="{IDENTITY}"/>')
+            comps.append(f'    <component p:path="{sub}" objectid="{pid}" '
+                         f'p:UUID="{_uid((oi << 16) | (len(part_ids) - 1), COMPONENT_SUFFIX)}" transform="{IDENTITY}"/>')
         sub_lines.append(" </resources>\n <build/>\n</model>")
         files[sub.lstrip("/")] = "\n".join(sub_lines)
         rels.append(sub)
 
         oid = next_id
         next_id += 1
-        root_objs.append(f'  <object id="{oid}" p:UUID="{uuid.uuid4()}" type="model">\n   <components>\n'
+        root_objs.append(f'  <object id="{oid}" p:UUID="{_uid(oi, OBJECT_SUFFIX)}" type="model">\n   <components>\n'
                          + "\n".join(comps) + "\n   </components>\n  </object>")
         ox, oy = plate_origin(obj.plate)
         tx, ty = ox + obj.x, oy + obj.y
-        build_items.append(f'  <item objectid="{oid}" p:UUID="{uuid.uuid4()}" '
+        build_items.append(f'  <item objectid="{oid}" p:UUID="{_uid(oid, BUILD_ITEM_SUFFIX)}" '
                            f'transform="1 0 0 0 1 0 0 0 1 {_f(tx)} {_f(ty)} 0" printable="1"/>')
         plates.setdefault(obj.plate, []).append((oid, identify))
+        assemble.append((oid, tx, ty))
         identify += 1
 
         cfg.append(f' <object id="{oid}">')
@@ -165,14 +187,36 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
             cfg.append(f'   <metadata key="identify_id" value="{ident}"/>')
             cfg.append("  </model_instance>")
         cfg.append(" </plate>")
+    cfg.append(" <assemble>")
+    for (oid, tx, ty) in assemble:
+        cfg.append(f'  <assemble_item object_id="{oid}" instance_id="0" '
+                   f'transform="1 0 0 0 1 0 0 0 1 {_f(tx)} {_f(ty)} 0" offset="0 0 0" />')
+    cfg.append(" </assemble>")
     cfg.append("</config>")
+
+    cut_info = ['<?xml version="1.0" encoding="utf-8"?>', "<objects>"]
+    for i in range(1, len(objects) + 1):
+        cut_info += [f' <object id="{i}">', '  <cut_id id="0" check_sum="1" connectors_cnt="0"/>', " </object>"]
+    cut_info.append("</objects>")
 
     model = ['<?xml version="1.0" encoding="UTF-8"?>', f'<model unit="millimeter" xml:lang="en-US" {NS}>',
              f' <metadata name="Application">{APP}</metadata>',
              ' <metadata name="BambuStudio:3mfVersion">1</metadata>',
+             ' <metadata name="Copyright"></metadata>',
+             f' <metadata name="CreationDate">{_today()}</metadata>',
+             ' <metadata name="Description"></metadata>',
+             ' <metadata name="Designer"></metadata>',
+             ' <metadata name="DesignerCover"></metadata>',
+             ' <metadata name="DesignerUserId"></metadata>',
+             ' <metadata name="License"></metadata>',
+             f' <metadata name="ModificationDate">{_today()}</metadata>',
+             ' <metadata name="Origin"></metadata>',
+             ' <metadata name="ProfileCover"></metadata>',
+             ' <metadata name="ProfileDescription"></metadata>',
+             ' <metadata name="ProfileTitle"></metadata>',
              f' <metadata name="Title">{title}</metadata>',
              " <resources>", *root_objs, " </resources>",
-             f' <build p:UUID="{uuid.uuid4()}">', *build_items, " </build>", "</model>"]
+             f' <build p:UUID="{BUILD_UUID}">', *build_items, " </build>", "</model>"]
 
     content_types = ('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/'
                      'package/2006/content-types">\n <Default Extension="rels" ContentType="application/'
@@ -197,6 +241,7 @@ def write_bambu_3mf(path, objects: list[BObject], settings: dict[str, str], titl
         for name, text in files.items():
             z.writestr(name, text)
         z.writestr("Metadata/model_settings.config", "\n".join(cfg))
+        z.writestr("Metadata/cut_information.xml", "\n".join(cut_info))
         ps = project_settings_for(colors or [], settings)
         z.writestr("Metadata/project_settings.config", json.dumps(ps, indent=4, ensure_ascii=False))
         ver = APP.split("-", 1)[1]
