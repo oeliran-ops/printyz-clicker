@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}עיצוב קליקר — {{ site }}{% endblock %}
+{% block head %}
+<script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.min.js"}}</script>
+{% endblock %}
+{% block main %}
+<div class="cfg">
+  <section class="viewer" aria-label="תצוגת תלת־ממד של הקליקר">
+    <canvas id="view" aria-hidden="true"></canvas>
+    <div class="busy" id="busy" role="status" aria-live="polite">מעדכן תצוגה…</div>
+    <div class="views">
+      <button class="btn" type="button" data-view="iso">3D</button>
+      <button class="btn" type="button" data-view="top">מלמעלה</button>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="steps" role="tablist" aria-label="שלבי העיצוב">
+      <button class="btn" role="tab" data-step="text" aria-selected="true">1 · טקסט</button>
+      <button class="btn" role="tab" data-step="font">2 · גופן</button>
+      <button class="btn" role="tab" data-step="design">3 · עיצוב</button>
+      <button class="btn" role="tab" data-step="body">4 · גוף</button>
+      <button class="btn" role="tab" data-step="colors">5 · צבעים</button>
+      <button class="btn" role="tab" data-step="symbols" id="tab-symbols">6 · סמלים</button>
+      <button class="btn" role="tab" data-step="order">✓ הזמנה</button>
+    </div>
+    <div id="messages" aria-live="polite"></div>
+
+    <div class="step on" data-step="text" role="tabpanel">
+      <h2>מה ייכתב על הקליקר?</h2>
+      <label class="field"><span>שם או מילה (עברית או אנגלית)</span>
+        <input id="text" type="text" value="שלום" maxlength="20" autocomplete="off" inputmode="text"></label>
+      <div class="chips" id="keychips" aria-label="המקשים לפי סדר המוצר"></div>
+      <p class="muted" id="keycount"></p>
+      <div class="opts" style="grid-template-columns:repeat(2,1fr)">
+        <button class="opt" type="button" id="blank-right">+ מקש ריק מימין</button>
+        <button class="opt" type="button" id="blank-left">+ מקש ריק משמאל</button>
+      </div>
+    </div>
+
+    <div class="step" data-step="font" role="tabpanel">
+      <h2>בחרו גופן</h2>
+      <div class="opts fonts" id="fonts"></div>
+    </div>
+
+    <div class="step" data-step="design" role="tabpanel">
+      <h2>סגנון האותיות</h2>
+      <div class="opts" id="modes"></div>
+      <label class="field"><span>גודל האותיות: <output id="size-out">100%</output></span>
+        <input id="size" type="range" min="50" max="100" step="5" value="100" style="width:100%"></label>
+      <h2>סוג המקשים</h2>
+      <div class="opts" id="keycaps"></div>
+      <h2>סידור המקשים</h2>
+      <div class="opts" id="layouts"></div>
+      <div id="grid-size" hidden>
+        <label class="field"><span>שורות</span><input id="rows" type="number" min="1" max="4" value="2"></label>
+        <label class="field"><span>עמודות</span><input id="cols" type="number" min="1" max="5" value="3"></label>
+      </div>
+    </div>
+
+    <div class="step" data-step="body" role="tabpanel">
+      <h2>טקסטורה חיצונית</h2>
+      <div class="opts" id="textures"></div>
+      <div id="keychain-box">
+        <h2>מחזיק מפתחות</h2>
+        <label class="check"><input id="kc" type="checkbox"> <span>להוסיף מחזיק מפתחות</span></label>
+        <div id="kc-opts" hidden>
+          <div class="opts" id="kc-side"></div>
+          <div class="opts" id="kc-shape" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-step="colors" role="tabpanel">
+      <h2>צבע הגוף</h2><div class="swatches" id="c-body"></div>
+      <h2>צבע המקשים</h2><div class="swatches" id="c-cap"></div>
+      <h2>צבע האותיות</h2><div class="swatches" id="c-legend"></div>
+    </div>
+
+    <div class="step" data-step="symbols" role="tabpanel">
+      <h2>הוספת סמל</h2>
+      <p class="muted">בחרו סמל והוסיפו אותו כמקש נוסף מימין או משמאל.</p>
+      <div class="opts symbols" id="symbols"></div>
+      <div class="opts" style="grid-template-columns:repeat(2,1fr);margin-top:10px">
+        <button class="opt" type="button" id="sym-right" disabled>+ הוסף מימין</button>
+        <button class="opt" type="button" id="sym-left" disabled>+ הוסף משמאל</button>
+      </div>
+      <div class="chips" id="extras"></div>
+    </div>
+
+    <div class="step" data-step="order" role="tabpanel">
+      <h2>פרטי ההזמנה</h2>
+      <div id="price-lines" class="prose" style="padding:12px 16px"></div>
+      <form id="order-form" novalidate>
+        <label class="field"><span>שם מלא</span><input name="name" type="text" required autocomplete="name"></label>
+        <label class="field"><span>אימייל (לעדכונים)</span><input name="email" type="email" required autocomplete="email"></label>
+        <label class="field"><span>טלפון</span><input name="phone" type="tel" required autocomplete="tel" inputmode="tel"></label>
+        <label class="field"><span>הערות (לא חובה)</span><textarea name="notes" rows="3"></textarea></label>
+        <label class="check"><input name="marketing" type="checkbox"> <span>אשמח לקבל עדכונים על מוצרים חדשים והנחות</span></label>
+        <label class="check"><input name="terms" type="checkbox" required> <span>קראתי ואני מסכים/ה ל<a href="/terms" target="_blank">תקנון</a> ול<a href="/privacy" target="_blank">מדיניות הפרטיות</a></span></label>
+        <p class="muted">ההזמנה תישלח לבדיקה. לאחר האישור תקבלו במייל קישור לתשלום.</p>
+        <button class="btn primary" type="submit" id="submit">שליחת ההזמנה</button>
+      </form>
+    </div>
+  </section>
+</div>
+<div class="pricebar"><div class="wrap">
+  <div><div class="muted" style="font-size:13px">מחיר</div><div class="price" id="price" aria-live="polite">—</div></div>
+  <button class="btn primary" type="button" id="next">המשך</button>
+</div></div>
+<script type="module" src="/static/js/clicker.js"></script>
+{% endblock %}
+{% block footer %}{% endblock %}

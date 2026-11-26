@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}הזמנה #{{ o.id }} — {{ site }}{% endblock %}
+{% block head %}<meta name="robots" content="noindex">{% endblock %}
+{% block main %}
+<div class="wrap section">
+  <h1>הזמנה #{{ o.id }}</h1>
+  <p>שלום {{ o.name }}, סטטוס ההזמנה: <span class="badge {{ o.status }}">{{ o.status_label }}</span></p>
+  <div class="prose">
+    <p><strong>קליקר:</strong> "{{ o.summary.text }}" · {{ o.summary.key_count }} מקשים</p>
+    <p><strong>צבעים:</strong> גוף {{ o.summary.colors.body }} · כובעים {{ o.summary.colors.cap }} · אותיות {{ o.summary.colors.legend }}</p>
+    <p><strong>מחיר:</strong> ₪{{ '%g' % (o.final_price or o.price) }}</p>
+    {% if o.status == 'approved' and o.payment_link %}
+      <p><a class="btn primary" href="{{ o.payment_link }}" rel="noopener">מעבר לתשלום</a></p>
+    {% endif %}
+    {% if o.status == 'in_production' and o.ready_days %}<p>צפוי להיות מוכן בעוד כ־{{ o.ready_days }} ימים.</p>{% endif %}
+    {% if o.admin_note and o.status in ('rejected','approved') %}<p class="muted">{{ o.admin_note }}</p>{% endif %}
+  </div>
+  <h2>התקדמות</h2>
+  <ul class="timeline">
+  {% for h in o.history %}<li class="on">{{ statuses.get(h.status, h.status) }} {% if h.note and h.note not in statuses.get(h.status, '') %}— {{ h.note }}{% endif %}</li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}

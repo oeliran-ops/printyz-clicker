@@ -1,0 +1,18 @@
+{% extends "admin/_base.html" %}
+{% block title %}עדכונים — {{ site }}{% endblock %}
+{% block admin %}
+<h1>עדכונים בדף הבית</h1>
+{% macro pform(p) %}
+<form class="adm-form card" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if p %}<input type="hidden" name="pid" value="{{ p.id }}">{% endif %}
+  <label>כותרת <input type="text" name="title" value="{{ p.title if p else '' }}" required></label>
+  <label>תוכן <textarea name="body" rows="3">{{ p.body if p else '' }}</textarea></label>
+  <label class="check"><input type="checkbox" name="visible" value="1" {% if not p or p.visible %}checked{% endif %}> מוצג באתר</label>
+  <div class="row"><button class="btn primary">שמירה</button>
+  {% if p %}<button class="btn" name="delete" value="1" formnovalidate onclick="return confirm('למחוק?')">מחיקה</button>{% endif %}</div>
+</form>
+{% endmacro %}
+{{ pform(None) }}
+{% for p in posts %}{{ pform(p) }}{% endfor %}
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ product.title }} — {{ site }}{% endblock %}
+{% block main %}
+<div class="wrap section">
+  <p><a href="/gallery">← לגלריה</a></p>
+  <h1>{{ product.title }}</h1>
+  {% if product.price %}<p><strong>{{ product.price }}</strong></p>{% endif %}
+  <div class="cards">
+    {% for im in product.images %}<img class="card img" src="/uploads/{{ im }}" alt="{{ product.title }} — תמונה {{ loop.index }}">{% endfor %}
+  </div>
+  {% if product.description %}<div class="prose" style="margin-top:16px;white-space:pre-line">{{ product.description }}</div>{% endif %}
+  {% if contact.whatsapp %}<p><a class="btn primary" href="https://wa.me/{{ contact.whatsapp }}?text={{ ('שלום, אני מעוניין/ת ב: ' ~ product.title)|urlencode }}">לפרטים בוואטסאפ</a></p>{% endif %}
+</div>
+{% endblock %}

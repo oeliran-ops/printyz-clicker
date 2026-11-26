@@ -1,0 +1,58 @@
+{% extends "admin/_base.html" %}
+{% block title %}הזמנה #{{ o.id }} — {{ site }}{% endblock %}
+{% block admin %}
+<h1>הזמנה #{{ o.id }} <span class="badge {{ o.status }}">{{ o.status_label }}</span></h1>
+<div class="cards" style="align-items:start">
+  <div class="card">
+    <img src="/admin/orders/{{ o.id }}/preview.png" alt="תצוגת הקליקר" style="width:100%;border-radius:10px;background:#fff">
+    <p><a class="btn" href="/admin/orders/{{ o.id }}/file">הורדת קובץ הזמנה (.printyz-order)</a></p>
+    <p class="muted">פותחים את הקובץ בתוכנת PRINTYZ Studio במחשב ומייצאים ל־Bambu Studio.</p>
+  </div>
+  <div class="card prose">
+    <p><strong>לקוח:</strong> {{ o.name }}</p>
+    <p><strong>טלפון:</strong> <a href="tel:{{ o.phone }}">{{ o.phone }}</a> · <strong>אימייל:</strong> <a href="mailto:{{ o.email }}">{{ o.email }}</a></p>
+    <p><strong>דיוור:</strong> {{ 'כן' if o.marketing else 'לא' }}</p>
+    <p><strong>הערות:</strong> {{ o.notes or '—' }}</p>
+    <p><strong>קליקר:</strong> "{{ o.summary.text }}" · {{ o.summary.key_count }} מקשים</p>
+    <p><strong>צבעים:</strong> גוף {{ o.summary.colors.body }} · כובעים {{ o.summary.colors.cap }} · אותיות {{ o.summary.colors.legend }}</p>
+    <p><strong>מחיר אוטומטי:</strong> ₪{{ '%g' % o.price }}
+      ({% for l, a in o.price_breakdown %}{{ l }}: ₪{{ '%g' % a }}{% if not loop.last %} · {% endif %}{% endfor %})</p>
+    {% if o.final_price %}<p><strong>מחיר סופי:</strong> ₪{{ '%g' % o.final_price }}</p>{% endif %}
+    {% if o.payment_link %}<p><strong>קישור תשלום:</strong> <a href="{{ o.payment_link }}" rel="noopener">{{ o.payment_link }}</a></p>{% endif %}
+    <p><strong>דף מעקב ללקוח:</strong> <a href="{{ track }}">{{ track }}</a></p>
+    {% if wa %}<p><a class="btn primary" href="{{ wa }}" target="_blank" rel="noopener">שליחת העדכון ללקוח בוואטסאפ</a></p>{% endif %}
+  </div>
+</div>
+
+<h2>פעולות</h2>
+{% macro act(action, label, cls='') %}<button class="btn {{ cls }}" name="action" value="{{ action }}">{{ label }}</button>{% endmacro %}
+{% if o.status == 'pending' %}
+<form class="adm-form" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>מחיר סופי (₪) <input type="number" step="0.5" min="0" name="final_price" value="{{ '%g' % o.price }}"></label>
+  <label>קישור לתשלום (Bit / PayBox / אחר) <input type="url" name="payment_link" placeholder="https://..."></label>
+  <label>הערה ללקוח (לא חובה) <textarea name="admin_note" rows="2"></textarea></label>
+  <div class="row">{{ act('approve', 'אישור ושליחת קישור תשלום', 'primary') }} {{ act('reject', 'דחייה') }}</div>
+</form>
+{% elif o.status == 'approved' %}
+<form class="row" method="post"><input type="hidden" name="csrf" value="{{ csrf }}">{{ act('paid', 'סימון: התשלום התקבל', 'primary') }} {{ act('cancelled', 'ביטול') }}</form>
+{% elif o.status == 'paid' %}
+<form class="adm-form" method="post"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>בעוד כמה ימים יהיה מוכן? <input type="number" min="0" max="90" name="ready_days" value="3" required></label>
+  <div class="row">{{ act('production', 'התחלת ייצור + עדכון ללקוח', 'primary') }}</div>
+</form>
+{% elif o.status == 'in_production' %}
+<form class="row" method="post"><input type="hidden" name="csrf" value="{{ csrf }}">{{ act('ready', 'מוכן — עדכון ללקוח', 'primary') }}</form>
+{% elif o.status == 'ready' %}
+<form class="row" method="post"><input type="hidden" name="csrf" value="{{ csrf }}">{{ act('delivered', 'נמסר', 'primary') }}</form>
+{% endif %}
+
+<form class="adm-form" method="post" style="margin-top:1rem">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>הערה פנימית / ללקוח <textarea name="admin_note" rows="2">{{ o.admin_note }}</textarea></label>
+  <div class="row">{{ act('note', 'שמירת הערה') }}</div>
+</form>
+
+<h2>היסטוריה</h2>
+<ul class="timeline">{% for h in o.history %}<li class="on">{{ h.t | int | datetime }} — {{ statuses.get(h.status, h.status) }}{% if h.note %} · {{ h.note }}{% endif %}</li>{% endfor %}</ul>
+{% endblock %}

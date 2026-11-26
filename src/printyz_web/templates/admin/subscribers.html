@@ -1,0 +1,9 @@
+{% extends "admin/_base.html" %}
+{% block title %}רשימת דיוור — {{ site }}{% endblock %}
+{% block admin %}
+<h1>לקוחות שאישרו דיוור ({{ subs|length }})</h1>
+<p><a class="btn" href="/admin/subscribers.csv">הורדה כ־CSV (Excel)</a></p>
+<p class="muted">רק לקוחות שסימנו בעצמם הסכמה לקבלת דיוור (חוק הספאם). בכל דיוור יש לאפשר הסרה.</p>
+<table class="list"><thead><tr><th>שם</th><th>אימייל</th><th>טלפון</th></tr></thead>
+<tbody>{% for r in subs %}<tr><td>{{ r.name }}</td><td>{{ r.email }}</td><td>{{ r.phone }}</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

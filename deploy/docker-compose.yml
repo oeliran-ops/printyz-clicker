@@ -1,0 +1,19 @@
+# Run on the server:  cd deploy && cp .env.example .env  (fill it in)  &&  docker compose up -d --build
+services:
+  web:
+    build: ..
+    env_file: .env
+    volumes:
+      - ./site-data:/data
+    restart: unless-stopped
+  caddy:                      # automatic free HTTPS certificate (Let's Encrypt)
+    image: caddy:2.8
+    ports: ["80:80", "443:443"]
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    restart: unless-stopped
+volumes:
+  caddy-data:

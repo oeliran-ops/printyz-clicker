@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}גלריה — {{ site }}{% endblock %}
+{% block main %}
+<div class="wrap section">
+  <h1>גלריה</h1>
+  {% if not products %}<p class="muted">בקרוב יעלו לכאן מוצרים.</p>{% endif %}
+  <div class="cards">
+  {% for p in products %}
+    <a class="card" href="/gallery/{{ p.id }}">
+      {% if p.images %}<img class="img" src="/uploads/{{ p.images[0] }}" alt="{{ p.title }}" loading="lazy">{% else %}<div class="img"></div>{% endif %}
+      <div class="body"><h3>{{ p.title }}</h3>{% if p.price %}<div class="muted">{{ p.price }}</div>{% endif %}</div>
+    </a>
+  {% endfor %}
+  </div>
+</div>
+{% endblock %}

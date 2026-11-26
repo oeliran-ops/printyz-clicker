@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="hero"><div class="wrap">
+  <h1>קליקר עם השם שלך</h1>
+  <p>מעצבים קליקר מכאני אישי בעברית או באנגלית, רואים אותו בתלת־ממד ומזמינים — מודפס בתלת־ממד ומורכב עם מתגים אמיתיים.</p>
+  <a class="btn primary" href="/clicker">עצבו קליקר עכשיו</a>
+  <a class="btn" href="/gallery">לגלריית המוצרים</a>
+</div></section>
+{% if products %}
+<section class="section"><div class="wrap">
+  <h2>מהגלריה</h2>
+  <div class="cards">
+  {% for p in products %}
+    <a class="card" href="/gallery/{{ p.id }}">
+      {% if p.images %}<img class="img" src="/uploads/{{ p.images[0] }}" alt="{{ p.title }}" loading="lazy">{% else %}<div class="img"></div>{% endif %}
+      <div class="body"><h3>{{ p.title }}</h3>{% if p.price %}<div class="muted">{{ p.price }}</div>{% endif %}</div>
+    </a>
+  {% endfor %}
+  </div>
+</div></section>
+{% endif %}
+{% if posts %}
+<section class="section"><div class="wrap">
+  <h2>עדכונים</h2>
+  {% for p in posts %}<article class="post"><h3>{{ p.title }}</h3><div class="muted" style="white-space:pre-line">{{ p.body }}</div></article>{% endfor %}
+</div></section>
+{% endif %}
+{% if contact.about %}
+<section class="section"><div class="wrap"><div class="prose"><h2>עלינו</h2><p style="white-space:pre-line">{{ contact.about }}</p></div></div></section>
+{% endif %}
+{% endblock %}

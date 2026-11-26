@@ -10,3 +10,5 @@ out/
 customer/dist/
 customer/build/
 customer/output/
+site-data/
+deploy/.env

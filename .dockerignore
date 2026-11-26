@@ -1,0 +1,9 @@
+.venv
+.git
+site-data
+out
+Projects
+customer/dist
+customer/build
+customer/output
+**/__pycache__

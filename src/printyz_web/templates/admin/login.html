@@ -1,0 +1,10 @@
+{% extends "admin/_base.html" %}
+{% block title %}כניסת מנהל — {{ site }}{% endblock %}
+{% block admin %}
+<h1>כניסת מנהל</h1>
+{% if error %}<div class="msg err" role="alert">{{ error }}</div>{% endif %}
+<form class="adm-form" method="post" action="/admin/login">
+  <label>סיסמה <input type="password" name="password" autocomplete="current-password" required autofocus></label>
+  <button class="btn primary" type="submit">כניסה</button>
+</form>
+{% endblock %}

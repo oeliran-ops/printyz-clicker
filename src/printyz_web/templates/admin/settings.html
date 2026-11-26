@@ -1,0 +1,55 @@
+{% extends "admin/_base.html" %}
+{% block title %}הגדרות — {{ site }}{% endblock %}
+{% block admin %}
+<h1>הגדרות, מלאי ומחירים</h1>
+{% if request.query_params.get('saved') %}<p class="ok" role="status">נשמר. האתר מתעדכן מיד.</p>{% endif %}
+{% set N = {'textures': {'smooth':'חלק','diamond':'יהלומים','ribs':'פסים','fluted':'חריצים','dots':'נקודות','chevron':'זיגזג'},
+            'keycap_styles': {'standard':'רגיל','low_profile':'נמוך','thocky':'עבה'},
+            'layouts': {'row':'שורה','column':'עמודה','grid':'רשת','wasd':'WASD','arrows':'חצים'},
+            'legend_modes': {'flush':'שטוח צבעוני','raised':'בולט','engraved':'חרוט'}} %}
+<form class="adm-form" method="post">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<fieldset><legend>צבעי פילמנט (מלאי)</legend>
+  {% for c in pol.colors %}
+  <div class="row">
+    <input type="color" name="color_hex" value="{{ c.hex }}" aria-label="צבע">
+    <input type="text" name="color_name" value="{{ c.name }}" aria-label="שם הצבע">
+    <label class="check"><input type="checkbox" name="color_stock" value="{{ loop.index0 }}" {% if c.in_stock %}checked{% endif %}> במלאי</label>
+  </div>
+  {% endfor %}
+  <p class="muted">למחיקת צבע: מחקו את השם שלו ושמרו.</p>
+  <div class="row"><input type="color" name="new_color_hex" value="#9AA0A6" aria-label="צבע חדש">
+    <input type="text" name="new_color_name" placeholder="שם צבע חדש" aria-label="שם צבע חדש"></div>
+  {% for k, lab in (('default_body','ברירת מחדל לגוף'),('default_cap','ברירת מחדל לכובעים'),('default_legend','ברירת מחדל לאותיות')) %}
+  <label>{{ lab }} <select name="{{ k }}">{% for c in pol.stock_colors() %}<option value="{{ c.hex }}" {% if c.hex|upper == pol[k]|upper %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>
+  {% endfor %}
+</fieldset>
+
+<fieldset><legend>אפשרויות ללקוח</legend>
+  {% for key, title in (('textures','טקסטורות'),('keycap_styles','סגנונות כובע'),('layouts','סידורים'),('legend_modes','סוג אותיות')) %}
+  <div><strong>{{ title }}:</strong>
+    <div class="row">{% for v, lab in N[key].items() %}<label class="check"><input type="checkbox" name="{{ key }}" value="{{ v }}" {% if v in pol[key] %}checked{% endif %}> {{ lab }}</label>{% endfor %}</div>
+  </div>
+  {% endfor %}
+  <label>מקסימום מקשים (עד 10) <input type="number" name="max_keys" min="1" max="10" value="{{ pol.max_keys }}"></label>
+  <label class="check"><input type="checkbox" name="keychain" {% if pol.keychain %}checked{% endif %}> מחזיק מפתחות</label>
+  <label class="check"><input type="checkbox" name="symbols_allowed" {% if pol.symbols_allowed %}checked{% endif %}> סמלים</label>
+  <label>שם העסק <input type="text" name="shop_name" value="{{ pol.shop_name }}"></label>
+</fieldset>
+
+<fieldset><legend>מחירים (₪)</legend>
+  {% for k, lab in (('per_key','לכל מקש'),('base','מחיר בסיס לקליקר'),('symbol_extra','תוספת לכל סמל'),('keychain_extra','תוספת מחזיק מפתחות'),
+                    ('texture_extra','תוספת טקסטורה'),('raised_extra','תוספת אותיות בולטות'),('extra_colour','לכל צבע מעבר ל־3'),('minimum','מינימום להזמנה')) %}
+  <label>{{ lab }} <input type="number" step="0.5" min="0" name="price_{{ k }}" value="{{ '%g' % pr[k] }}"></label>
+  {% endfor %}
+</fieldset>
+
+<fieldset><legend>פרטי קשר באתר</legend>
+  {% for k, lab in (('phone','טלפון'),('whatsapp','וואטסאפ (972…)'),('email','אימייל'),('instagram','קישור אינסטגרם'),('facebook','קישור פייסבוק')) %}
+  <label>{{ lab }} <input type="text" name="contact_{{ k }}" value="{{ contact.get(k, '') }}"></label>
+  {% endfor %}
+  <label>אודות (דף הבית) <textarea name="contact_about" rows="3">{{ contact.get('about', '') }}</textarea></label>
+</fieldset>
+<button class="btn primary" type="submit">שמירה</button>
+</form>
+{% endblock %}

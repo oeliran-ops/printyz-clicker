@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}{{ site }}{% endblock %}</title>
+<meta name="description" content="{{ site }} — מוצרים מודפסים בתלת־ממד ועיצוב קליקרים אישיים">
+<link rel="icon" href="/static/favicon.png">
+<link rel="stylesheet" href="/static/css/site.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+<a class="skip" href="#main">דילוג לתוכן</a>
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="{{ site }} — דף הבית">Print<span>yz</span></a>
+    <nav class="main" aria-label="ניווט ראשי">
+      <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>בית</a>
+      <a href="/gallery" {% if request.url.path.startswith('/gallery') %}aria-current="page"{% endif %}>גלריה</a>
+      <a href="/clicker" {% if request.url.path == '/clicker' %}aria-current="page"{% endif %}>עיצוב קליקר</a>
+    </nav>
+  </div>
+</header>
+<main id="main">{% block main %}{% endblock %}</main>
+{% block footer %}
+<footer>
+  <div class="wrap">
+    <div>© {{ site }} ·
+      {% if contact.email %}<a href="mailto:{{ contact.email }}">{{ contact.email }}</a> · {% endif %}
+      {% if contact.whatsapp %}<a href="https://wa.me/{{ contact.whatsapp }}">וואטסאפ</a> · {% endif %}
+      {% if contact.instagram %}<a href="{{ contact.instagram }}">אינסטגרם</a> · {% endif %}
+      {% if contact.facebook %}<a href="{{ contact.facebook }}">פייסבוק</a>{% endif %}
+    </div>
+    <div><a href="/accessibility">הצהרת נגישות</a> · <a href="/privacy">מדיניות פרטיות</a> · <a href="/terms">תקנון</a></div>
+  </div>
+</footer>
+{% endblock %}
+</body>
+</html>

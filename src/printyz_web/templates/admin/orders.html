@@ -1,0 +1,26 @@
+{% extends "admin/_base.html" %}
+{% block title %}הזמנות — {{ site }}{% endblock %}
+{% block admin %}
+<h1>הזמנות</h1>
+<div class="row" style="margin-bottom:1rem">
+  <a class="chip" href="/admin">הכול</a>
+  {% for k, v in statuses.items() %}<a class="chip" href="/admin?status={{ k }}" {% if status == k %}aria-current="true"{% endif %}>{{ v }}</a>{% endfor %}
+</div>
+{% if not orders %}<p class="muted">אין הזמנות.</p>{% else %}
+<div style="overflow-x:auto">
+<table class="list">
+<thead><tr><th>#</th><th>תאריך</th><th>לקוח</th><th>קליקר</th><th>מחיר</th><th>סטטוס</th></tr></thead>
+<tbody>
+{% for o in orders %}
+<tr>
+  <td><a href="/admin/orders/{{ o.id }}">#{{ o.id }}</a></td>
+  <td>{{ o.created | int | datetime }}</td>
+  <td>{{ o.name }}<br><span class="muted">{{ o.phone }}</span></td>
+  <td>"{{ o.summary.text }}" · {{ o.summary.key_count }} מקשים</td>
+  <td>₪{{ '%g' % (o.final_price or o.price) }}</td>
+  <td><span class="badge {{ o.status }}">{{ o.status_label }}</span></td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endblock %}

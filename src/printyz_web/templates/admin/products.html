@@ -1,0 +1,23 @@
+{% extends "admin/_base.html" %}
+{% block title %}גלריה — {{ site }}{% endblock %}
+{% block admin %}
+<h1>גלריית מוצרים</h1>
+<h2>מוצר חדש</h2>
+{% macro pform(p) %}
+<form class="adm-form card" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if p %}<input type="hidden" name="pid" value="{{ p.id }}">{% endif %}
+  <label>שם <input type="text" name="title" value="{{ p.title if p else '' }}" required></label>
+  <label>תיאור <textarea name="description" rows="3">{{ p.description if p else '' }}</textarea></label>
+  <label>מחיר (טקסט חופשי, למשל "החל מ־₪40") <input type="text" name="price" value="{{ p.price if p else '' }}"></label>
+  {% if p and p.images %}<div class="row thumbs">{% for i in p.images %}<img src="/uploads/{{ i }}" alt="">{% endfor %}</div>{% endif %}
+  <label>הוספת תמונות <input type="file" name="images" accept="image/*" multiple></label>
+  <label class="check"><input type="checkbox" name="visible" value="1" {% if not p or p.visible %}checked{% endif %}> מוצג באתר</label>
+  <div class="row"><button class="btn primary">שמירה</button>
+  {% if p %}<button class="btn" name="delete" value="1" onclick="return confirm('למחוק את המוצר?')">מחיקה</button>{% endif %}</div>
+</form>
+{% endmacro %}
+{{ pform(None) }}
+<h2>מוצרים קיימים</h2>
+{% for p in products %}{{ pform(p) }}{% else %}<p class="muted">עדיין אין מוצרים.</p>{% endfor %}
+{% endblock %}
